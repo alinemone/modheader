@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (if tooling is added later)
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+*.zip
+*.crx
+*.pem
+
+# Exported profiles — may contain real tokens/secrets, never commit
+openheader_profiles*.json
+modheader_*.json
+*profiles*.json

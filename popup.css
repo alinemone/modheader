@@ -1,0 +1,605 @@
+:root {
+  --maroon: #6d071a;
+  --maroon-dark: #55040f;
+  --blue: #1a73e8;
+  --blue-dark: #1666cf;
+  --teal: #0f766e;
+  --red: #d32f2f;
+  --text: #1f2328;
+  --muted: #5f6368;
+  --line: #e2e4e8;
+  --rail-bg: #fafafa;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+}
+
+/* The `hidden` attribute must win over layout display values (flex/grid). */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  width: 600px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.app {
+  display: flex;
+  min-height: 360px;
+  max-height: 600px;
+}
+
+/* ---------- ریل چپ آیکونی ---------- */
+.rail {
+  width: 44px;
+  flex: 0 0 44px;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.rail-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.rail-btn:hover {
+  background: #ececec;
+  color: var(--text);
+}
+
+.rail-btn.menu {
+  font-size: 18px;
+}
+
+.rail-profiles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow: visible;
+}
+
+.rail-pcircle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--maroon);
+  background: #fff;
+  color: var(--maroon);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rail-pcircle:hover {
+  background: #f3d9de;
+}
+
+.rail-pcircle.current {
+  background: var(--maroon);
+  color: #fff;
+}
+
+.rail-pcircle .check {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 15px;
+  height: 15px;
+  background: #22c55e;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 9px;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--rail-bg);
+}
+
+.rail-spacer {
+  flex: 1;
+}
+
+/* ---------- Drawer پروفایل‌ها ---------- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 20;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 44px;
+  bottom: 0;
+  width: 220px;
+  z-index: 21;
+  background: #fff;
+  border-right: 1px solid var(--line);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-head {
+  padding: 12px 14px;
+  font-weight: 700;
+  color: var(--maroon);
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.drawer-add {
+  margin: 8px;
+  padding: 9px;
+  border: 1px dashed #c9ccd1;
+  background: transparent;
+  color: var(--blue);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.drawer-add:hover {
+  background: #f3f6fc;
+}
+
+.drawer-io {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px 10px;
+}
+
+.drawer-io button {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: #f7f8fa;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.drawer-io button:hover {
+  background: #eceef1;
+  border-color: #cfd3d8;
+}
+
+.pitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.pitem:hover {
+  background: #f2f2f2;
+}
+
+.pitem.active {
+  background: #f3d9de;
+}
+
+.pitem.dragging {
+  opacity: 0.4;
+}
+
+.pbadge {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--maroon);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pcheck {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 15px;
+  height: 15px;
+  background: #22c55e;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 9px;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+}
+
+.pname {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pitem.active .pname {
+  font-weight: 700;
+  color: var(--maroon);
+}
+
+.pdel {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 6px;
+}
+
+.pdel:hover {
+  background: #fde8e8;
+  color: var(--red);
+}
+
+/* ---------- ستون اصلی ---------- */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* نوار بالا */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--maroon);
+  color: #fff;
+  padding: 8px 10px;
+}
+
+.profile-id {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.profile-name {
+  /* Looks exactly like a plain label until you click into it. */
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: default;
+  padding: 2px 0;
+  margin: 0;
+  field-sizing: content; /* auto-size to text like a label (Chrome 123+) */
+  min-width: 20px;
+  max-width: 240px;
+  text-overflow: ellipsis;
+}
+
+.profile-name::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+/* Only when focused does it reveal that it is editable. */
+.profile-name:focus {
+  cursor: text;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.tb-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tb-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* محتوا */
+.content {
+  padding: 12px 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.hgroup {
+  margin-bottom: 14px;
+}
+
+.hgroup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--maroon);
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.grouptoggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.grouptoggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--teal);
+}
+
+.gtitle {
+  color: var(--maroon);
+  font-weight: 700;
+  font-style: italic;
+  font-size: 14px;
+}
+
+.mini-add {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+
+.mini-add:hover {
+  background: #f0f0f0;
+  color: var(--maroon);
+}
+
+/* ردیف‌ها */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-label {
+  flex: 0 0 84px;
+  min-width: 0;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--maroon);
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  padding: 5px 2px;
+  outline: none;
+}
+
+.row-label::placeholder {
+  color: #c8b6ba;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.row-label:focus {
+  border-bottom-color: var(--blue);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.row .tag {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 6px;
+  opacity: 0.55;
+  filter: grayscale(0.3);
+}
+
+.row .tag:hover {
+  background: #f0f0f0;
+  opacity: 1;
+  filter: none;
+}
+
+.row > input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--teal);
+  flex: 0 0 auto;
+}
+
+.row .name,
+.row .value {
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 5px 2px;
+  font-size: 13px;
+  color: var(--text);
+  direction: ltr;
+  text-align: left;
+  min-width: 0;
+  outline: none;
+}
+
+.row .name {
+  flex: 1 1 42%;
+  font-weight: 500;
+}
+
+.row .value {
+  flex: 1 1 58%;
+}
+
+.row .name:focus,
+.row .value:focus {
+  border-bottom-color: var(--blue);
+}
+
+.row .op {
+  flex: 0 0 auto;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.row .del {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.row .del:hover {
+  background: #fde8e8;
+}
+
+.row.disabled .name,
+.row.disabled .value,
+.row.disabled .op {
+  opacity: 0.4;
+}
+
+/* یادداشت اعمال */
+.apply-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 4px 0 12px;
+}
+
+/* دکمه‌های آبی */
+.cta {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-blue {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.btn-blue:hover {
+  background: var(--blue-dark);
+}
+
+.btn-blue .ico {
+  font-size: 12px;
+}
+
+/* فوتر */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.privacy {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+.privacy:hover {
+  text-decoration: underline;
+}
+
+body.paused .titlebar {
+  background: #9aa0a6;
+}

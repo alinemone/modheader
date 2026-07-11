@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenHeader</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Left icon rail -->
+      <aside class="rail">
+        <button class="rail-btn menu" id="railMenu" title="All profiles">☰</button>
+        <div class="rail-profiles" id="railProfiles"></div>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn" id="railAddProfile" title="New profile">＋</button>
+        <button class="rail-btn" id="railPause" title="Pause all">⏸</button>
+        <button class="rail-btn" id="railHelp" title="About">?</button>
+      </aside>
+
+      <!-- Profiles drawer (opened by the ☰ button) -->
+      <div class="backdrop" id="backdrop" hidden></div>
+      <aside class="drawer" id="drawer" hidden>
+        <div class="drawer-head">Profiles</div>
+        <div class="drawer-list" id="profileList"></div>
+        <button class="drawer-add" id="drawerAdd">＋ New profile</button>
+        <div class="drawer-io">
+          <button id="importBtn" title="Import ModHeader JSON">⭳ Import</button>
+          <button id="exportBtn" title="Export as ModHeader JSON">⭱ Export</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+      </aside>
+
+      <div class="main">
+        <!-- Maroon title bar -->
+        <header class="titlebar">
+          <div class="profile-id" id="profileId">1</div>
+          <input
+            class="profile-name"
+            id="profileName"
+            spellcheck="false"
+            placeholder="Profile name"
+          />
+          <div class="spacer"></div>
+          <button class="tb-btn" id="tbAdd" title="New profile">＋</button>
+          <button class="tb-btn" id="tbPause" title="Pause all">⏸</button>
+          <button class="tb-btn" id="tbDelete" title="Delete profile">🗑</button>
+        </header>
+
+        <div class="content">
+          <!-- Request headers -->
+          <section class="hgroup">
+            <div class="hgroup-head">
+              <label class="grouptoggle">
+                <input type="checkbox" id="requestEnabled" />
+                <span class="gtitle">Request headers</span>
+              </label>
+              <button class="mini-add" data-target="request" title="Add request header">＋</button>
+            </div>
+            <div id="requestRows" class="rows"></div>
+          </section>
+
+          <!-- Response headers -->
+          <section class="hgroup">
+            <div class="hgroup-head">
+              <label class="grouptoggle">
+                <input type="checkbox" id="responseEnabled" />
+                <span class="gtitle">Response headers</span>
+              </label>
+              <button class="mini-add" data-target="response" title="Add response header">＋</button>
+            </div>
+            <div id="responseRows" class="rows"></div>
+          </section>
+
+          <!-- Filters -->
+          <section class="hgroup" id="filterSection" hidden>
+            <div class="hgroup-head">
+              <span class="gtitle">Filters</span>
+              <button class="mini-add" data-target="filter" title="Add filter">＋</button>
+            </div>
+            <div id="filterRows" class="rows"></div>
+          </section>
+
+          <p class="apply-note" id="applyNote">
+            Your modifications are being applied to all requests. Add a filter
+            to limit the modification to certain URLs.
+          </p>
+
+          <div class="cta">
+            <button class="btn-blue" id="modBtn">
+              <span class="ico">＋</span> MOD
+            </button>
+            <button class="btn-blue" id="filterBtn">
+              <span class="ico">▼</span> FILTER
+            </button>
+          </div>
+        </div>
+
+        <footer class="footer">
+          <span id="ruleCount"></span>
+          <a
+            class="privacy"
+            id="repoLink"
+            href="https://github.com/alinemone/modheader"
+            target="_blank"
+            rel="noopener"
+            title="View source on GitHub"
+            >🔒 Open source · GitHub</a
+          >
+        </footer>
+      </div>
+    </div>
+
+    <!-- Header-name autocomplete suggestions -->
+    <datalist id="reqHeaderNames">
+      <option value="Accept"></option>
+      <option value="Accept-Charset"></option>
+      <option value="Accept-Encoding"></option>
+      <option value="Accept-Language"></option>
+      <option value="Authorization"></option>
+      <option value="Cache-Control"></option>
+      <option value="Connection"></option>
+      <option value="Content-Length"></option>
+      <option value="Content-Type"></option>
+      <option value="Cookie"></option>
+      <option value="DNT"></option>
+      <option value="Host"></option>
+      <option value="If-Modified-Since"></option>
+      <option value="If-None-Match"></option>
+      <option value="Origin"></option>
+      <option value="Pragma"></option>
+      <option value="Range"></option>
+      <option value="Referer"></option>
+      <option value="Sec-CH-UA"></option>
+      <option value="Sec-CH-UA-Mobile"></option>
+      <option value="Sec-CH-UA-Platform"></option>
+      <option value="Sec-Fetch-Dest"></option>
+      <option value="Sec-Fetch-Mode"></option>
+      <option value="Sec-Fetch-Site"></option>
+      <option value="Sec-Fetch-User"></option>
+      <option value="Upgrade-Insecure-Requests"></option>
+      <option value="User-Agent"></option>
+      <option value="X-API-Key"></option>
+      <option value="X-CSRF-Token"></option>
+      <option value="X-Forwarded-For"></option>
+      <option value="X-Forwarded-Host"></option>
+      <option value="X-Forwarded-Proto"></option>
+      <option value="X-Real-IP"></option>
+      <option value="X-Requested-With"></option>
+    </datalist>
+
+    <datalist id="resHeaderNames">
+      <option value="Access-Control-Allow-Credentials"></option>
+      <option value="Access-Control-Allow-Headers"></option>
+      <option value="Access-Control-Allow-Methods"></option>
+      <option value="Access-Control-Allow-Origin"></option>
+      <option value="Access-Control-Expose-Headers"></option>
+      <option value="Access-Control-Max-Age"></option>
+      <option value="Age"></option>
+      <option value="Cache-Control"></option>
+      <option value="Content-Disposition"></option>
+      <option value="Content-Encoding"></option>
+      <option value="Content-Language"></option>
+      <option value="Content-Security-Policy"></option>
+      <option value="Content-Type"></option>
+      <option value="Cross-Origin-Embedder-Policy"></option>
+      <option value="Cross-Origin-Opener-Policy"></option>
+      <option value="Cross-Origin-Resource-Policy"></option>
+      <option value="ETag"></option>
+      <option value="Expires"></option>
+      <option value="Last-Modified"></option>
+      <option value="Location"></option>
+      <option value="Permissions-Policy"></option>
+      <option value="Referrer-Policy"></option>
+      <option value="Retry-After"></option>
+      <option value="Server"></option>
+      <option value="Set-Cookie"></option>
+      <option value="Strict-Transport-Security"></option>
+      <option value="Vary"></option>
+      <option value="WWW-Authenticate"></option>
+      <option value="X-Content-Type-Options"></option>
+      <option value="X-Frame-Options"></option>
+      <option value="X-XSS-Protection"></option>
+    </datalist>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
