@@ -588,7 +588,8 @@ function bindEvents() {
     save();
   });
 
-  document.querySelectorAll(".mini-add").forEach((btn) => {
+  // Both the header "+" and the inline "Add header" button under each list.
+  document.querySelectorAll(".mini-add, .add-row").forEach((btn) => {
     btn.addEventListener("click", () => addRow(btn.dataset.target));
   });
 

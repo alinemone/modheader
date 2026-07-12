@@ -1,6 +1,5 @@
 :root {
   --maroon: #6d071a;
-  --maroon-dark: #55040f;
   --blue: #1a73e8;
   --blue-dark: #1666cf;
   --teal: #0f766e;
@@ -508,17 +507,6 @@ body {
   border-bottom-color: var(--blue);
 }
 
-.row .op {
-  flex: 0 0 auto;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  padding: 4px 2px;
-  outline: none;
-  cursor: pointer;
-}
-
 .row .del {
   flex: 0 0 auto;
   width: 26px;
@@ -537,9 +525,28 @@ body {
 }
 
 .row.disabled .name,
-.row.disabled .value,
-.row.disabled .op {
+.row.disabled .value {
   opacity: 0.4;
+}
+
+/* Inline "add header" button that sits directly under the last row, so it's
+   reachable no matter how many headers/filters there are. */
+.add-row {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px;
+  border: 1px dashed #c9ccd1;
+  background: transparent;
+  color: var(--blue);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.add-row:hover {
+  background: #f3f6fc;
+  border-color: #b7c6e6;
 }
 
 /* یادداشت اعمال */
