@@ -134,8 +134,6 @@ async function syncRules() {
     await chrome.action.setBadgeText({ text: count ? String(count) : "" });
     await chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
   } catch (e) {
-    // اگر قانونی نامعتبر بود، به‌جای «Uncaught» فقط لاگ کن و badge خطا نشان بده.
-    console.error("OpenHeader: failed to sync rules —", e.message);
     await chrome.action.setBadgeText({ text: "!" });
     await chrome.action.setBadgeBackgroundColor({ color: "#d32f2f" });
   }

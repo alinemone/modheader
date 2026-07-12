@@ -67,6 +67,15 @@ function activeIndex() {
 function render() {
   document.body.classList.toggle("paused", !!state.paused);
 
+  // Pause buttons flip to a play glyph while paused, so the icon always shows
+  // the action a click will perform (⏸ = pause, ▶ = resume).
+  for (const id of ["railPause", "tbPause"]) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.textContent = state.paused ? "▶" : "⏸";
+    btn.title = state.paused ? "Resume all" : "Pause all";
+  }
+
   const profile = activeProfile();
   const idx = activeIndex() + 1;
 
