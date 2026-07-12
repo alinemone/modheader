@@ -721,15 +721,9 @@ function addRow(target) {
 // ---------- Start ----------
 
 (async function init() {
+  await load();
   bindEvents();
-  try {
-    await load();
-    render();
-  } finally {
-    // Reveal the content once it's built (or even if load failed, so the
-    // spinner never gets stuck). No save() on open — opening the popup
-    // shouldn't rewrite storage and trigger a background DNR rebuild.
-    const loading = document.getElementById("loading");
-    if (loading) loading.hidden = true;
-  }
+  render();
+  // No save() on open: opening the popup shouldn't rewrite storage (which would
+  // trigger a full DNR rule rebuild in the background every time).
 })();
