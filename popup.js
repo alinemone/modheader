@@ -248,19 +248,18 @@ function updateGroupToggle(id, list) {
 function renderHeaderRows(containerId, list, datalistId, groupId) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
+  // Build every row off-DOM and attach once, so a long list is a single
+  // layout pass instead of one reflow per row.
+  const frag = document.createDocumentFragment();
   list.forEach((h) => {
     const row = document.createElement("div");
     row.className = "row" + (h.enabled ? "" : " disabled");
+    row.dataset.id = h.id;
 
     const chk = document.createElement("input");
     chk.type = "checkbox";
+    chk.className = "en";
     chk.checked = h.enabled;
-    chk.addEventListener("change", () => {
-      h.enabled = chk.checked;
-      row.classList.toggle("disabled", !h.enabled);
-      updateGroupToggle(groupId, list); // keep the section master in sync
-      commit();
-    });
 
     // Optional inline label shown in front of the record.
     let lbl = null;
@@ -271,16 +270,6 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
       lbl.placeholder = "label";
       lbl.value = h.label || "";
       lbl.dataset.hid = h.id;
-      lbl.addEventListener("input", () => {
-        h.label = lbl.value;
-        commit();
-      });
-      lbl.addEventListener("blur", () => {
-        if (!lbl.value.trim()) {
-          labelEditing.delete(h.id);
-          render();
-        }
-      });
     }
 
     const name = document.createElement("input");
@@ -288,91 +277,63 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
     name.className = "name";
     name.placeholder = "Name";
     name.value = h.name;
-    if (datalistId) name.setAttribute("list", datalistId);
-    name.addEventListener("input", () => {
-      h.name = name.value;
-      commit();
-    });
+    // Bind the datalist lazily (only on focus) — a datalist attached to every
+    // input is a real per-input cost in Chrome popups and dominates with many
+    // rows. Stash the id and wire it up in the focusin handler.
+    if (datalistId) name.dataset.list = datalistId;
 
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
     value.placeholder = "Value";
     value.value = h.value;
-    value.addEventListener("input", () => {
-      h.value = value.value;
-      commit();
-    });
 
     const tag = document.createElement("button");
     tag.className = "tag";
     tag.textContent = "🏷";
     tag.title = "Add label";
-    tag.addEventListener("click", () => {
-      labelEditing.add(h.id);
-      render();
-      const input = container.querySelector(`.row-label[data-hid="${h.id}"]`);
-      if (input) input.focus();
-    });
 
     const del = document.createElement("button");
     del.className = "del";
     del.textContent = "✕";
     del.title = "Remove";
-    del.addEventListener("click", () => {
-      const i = list.indexOf(h);
-      if (i >= 0) list.splice(i, 1);
-      labelEditing.delete(h.id);
-      render();
-      commit();
-    });
 
     if (lbl) row.append(chk, name, value, lbl, tag, del);
     else row.append(chk, name, value, tag, del);
-    container.appendChild(row);
+    frag.appendChild(row);
   });
+  container.appendChild(frag);
 }
 
 function renderFilterRows(containerId, list) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
+  const frag = document.createDocumentFragment();
   list.forEach((f) => {
     const row = document.createElement("div");
     row.className = "row" + (f.enabled ? "" : " disabled");
+    row.dataset.id = f.id;
 
     const chk = document.createElement("input");
     chk.type = "checkbox";
+    chk.className = "en";
     chk.checked = f.enabled;
-    chk.addEventListener("change", () => {
-      f.enabled = chk.checked;
-      row.classList.toggle("disabled", !f.enabled);
-      commit();
-    });
 
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
     value.placeholder = "URL contains, e.g. example.com";
     value.value = f.value;
-    value.addEventListener("input", () => {
-      f.value = value.value;
-      commit();
-    });
 
     const del = document.createElement("button");
     del.className = "del";
     del.textContent = "✕";
     del.title = "Remove filter";
-    del.addEventListener("click", () => {
-      const i = list.indexOf(f);
-      if (i >= 0) list.splice(i, 1);
-      render();
-      commit();
-    });
 
     row.append(chk, value, del);
-    container.appendChild(row);
+    frag.appendChild(row);
   });
+  container.appendChild(frag);
 }
 
 function updateRuleCount() {
@@ -529,9 +490,135 @@ async function importProfiles(file) {
   }
 }
 
+// ---------- Row event delegation ----------
+// One set of listeners per container (attached once), instead of ~5 per row.
+// This makes building a long header list much cheaper.
+
+function setupHeaderDelegation(containerId) {
+  const container = document.getElementById(containerId);
+  const ctx = () =>
+    containerId === "requestRows"
+      ? { list: activeProfile().headers, groupId: "requestEnabled" }
+      : { list: activeProfile().responseHeaders, groupId: "responseEnabled" };
+  const find = (e) => {
+    const row = e.target.closest(".row");
+    if (!row) return null;
+    const { list, groupId } = ctx();
+    const h = list.find((x) => x.id === row.dataset.id);
+    return h ? { row, h, list, groupId } : null;
+  };
+
+  container.addEventListener("change", (e) => {
+    if (!e.target.classList.contains("en")) return;
+    const c = find(e);
+    if (!c) return;
+    c.h.enabled = e.target.checked;
+    c.row.classList.toggle("disabled", !c.h.enabled);
+    updateGroupToggle(c.groupId, c.list);
+    commit();
+  });
+
+  container.addEventListener("input", (e) => {
+    const t = e.target;
+    const c = find(e);
+    if (!c) return;
+    if (t.classList.contains("name")) c.h.name = t.value;
+    else if (t.classList.contains("value")) c.h.value = t.value;
+    else if (t.classList.contains("row-label")) c.h.label = t.value;
+    else return;
+    commit();
+  });
+
+  container.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t.classList.contains("del")) {
+      const c = find(e);
+      if (!c) return;
+      const i = c.list.indexOf(c.h);
+      if (i >= 0) c.list.splice(i, 1);
+      labelEditing.delete(c.h.id);
+      render();
+      commit();
+    } else if (t.classList.contains("tag")) {
+      const c = find(e);
+      if (!c) return;
+      labelEditing.add(c.h.id);
+      render();
+      const input = container.querySelector(`.row-label[data-hid="${c.h.id}"]`);
+      if (input) input.focus();
+    }
+  });
+
+  // Attach the datalist only while the name field is focused (see renderHeaderRows).
+  container.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (t.classList.contains("name") && t.dataset.list) {
+      t.setAttribute("list", t.dataset.list);
+    }
+  });
+
+  // blur doesn't bubble, so use focusout. Unbind the datalist, and close an
+  // empty label field.
+  container.addEventListener("focusout", (e) => {
+    const t = e.target;
+    if (t.classList.contains("name")) {
+      t.removeAttribute("list");
+      return;
+    }
+    if (!t.classList.contains("row-label")) return;
+    const c = find(e);
+    if (c && !t.value.trim()) {
+      labelEditing.delete(c.h.id);
+      render();
+    }
+  });
+}
+
+function setupFilterDelegation(containerId) {
+  const container = document.getElementById(containerId);
+  const find = (e) => {
+    const row = e.target.closest(".row");
+    if (!row) return null;
+    const list = activeProfile().filters;
+    const f = list.find((x) => x.id === row.dataset.id);
+    return f ? { row, f, list } : null;
+  };
+
+  container.addEventListener("change", (e) => {
+    if (!e.target.classList.contains("en")) return;
+    const c = find(e);
+    if (!c) return;
+    c.f.enabled = e.target.checked;
+    c.row.classList.toggle("disabled", !c.f.enabled);
+    commit();
+  });
+
+  container.addEventListener("input", (e) => {
+    if (!e.target.classList.contains("value")) return;
+    const c = find(e);
+    if (!c) return;
+    c.f.value = e.target.value;
+    commit();
+  });
+
+  container.addEventListener("click", (e) => {
+    if (!e.target.classList.contains("del")) return;
+    const c = find(e);
+    if (!c) return;
+    const i = c.list.indexOf(c.f);
+    if (i >= 0) c.list.splice(i, 1);
+    render();
+    commit();
+  });
+}
+
 // ---------- Events ----------
 
 function bindEvents() {
+  setupHeaderDelegation("requestRows");
+  setupHeaderDelegation("responseRows");
+  setupFilterDelegation("filterRows");
+
   document.getElementById("railAddProfile").addEventListener("click", addProfile);
   document.getElementById("tbAdd").addEventListener("click", addProfile);
 
@@ -637,5 +724,7 @@ function addRow(target) {
   await load();
   bindEvents();
   render();
-  await save(); // ensure initial structure exists in storage
+  // No save() here on purpose: opening the popup shouldn't rewrite storage
+  // (which would trigger a full DNR rule rebuild in the background every time).
+  // Storage is written only when the user actually changes something.
 })();
