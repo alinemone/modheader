@@ -14,6 +14,7 @@
         <div class="rail-spacer"></div>
         <button class="rail-btn" id="railAddProfile" title="New profile">＋</button>
         <button class="rail-btn" id="railPause" title="Pause all">⏸</button>
+        <button class="rail-btn" id="railSettings" title="Appearance">⚙</button>
         <button class="rail-btn" id="railHelp" title="About">?</button>
       </aside>
 
@@ -22,11 +23,6 @@
         <div class="drawer-head">Profiles</div>
         <div class="drawer-list" id="profileList"></div>
         <button class="drawer-add" id="drawerAdd">＋ New profile</button>
-        <div class="drawer-io">
-          <button id="importBtn" title="Import ModHeader JSON">⭳ Import</button>
-          <button id="exportBtn" title="Export as ModHeader JSON">⭱ Export</button>
-        </div>
-        <input type="file" id="importFile" accept="application/json,.json" hidden />
       </aside>
 
       <div class="main">
@@ -103,6 +99,38 @@
           >
         </footer>
       </div>
+    </div>
+
+    <div class="settings-menu" id="settingsMenu" hidden>
+      <div class="da-row">
+        <span>Font</span>
+        <select id="fontFamily">
+          <option value="default">System</option>
+          <option value="segoe">Segoe UI</option>
+          <option value="calibri">Calibri</option>
+          <option value="tahoma">Tahoma</option>
+          <option value="verdana">Verdana</option>
+          <option value="arial">Arial</option>
+          <option value="georgia">Georgia</option>
+          <option value="mono">Monospace</option>
+        </select>
+      </div>
+      <div class="da-row">
+        <span>Font size</span>
+        <select id="fontSize">
+          <option value="12">12</option>
+          <option value="13">13</option>
+          <option value="14">14</option>
+          <option value="15">15</option>
+          <option value="16">16</option>
+          <option value="18">18</option>
+        </select>
+      </div>
+      <div class="settings-io">
+        <button id="importBtn" title="Import ModHeader JSON">⭳ Import</button>
+        <button id="exportBtn" title="Export as ModHeader JSON">⭱ Export</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden />
     </div>
 
     <datalist id="reqHeaderNames">

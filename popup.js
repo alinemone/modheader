@@ -2,6 +2,24 @@ const STORAGE_KEY = "openheader_state";
 
 let state = { paused: false, profiles: [], activeProfileId: null };
 
+const PROFILE_COLORS = [
+  "#6d071a", "#d32f2f", "#e8710a", "#c79100", "#2e7d32",
+  "#0f766e", "#1a73e8", "#3f51b5", "#7b1fa2", "#455a64",
+];
+
+const UI_FONTS = {
+  default: 'system-ui, "Segoe UI", Roboto, Tahoma, Arial, sans-serif',
+  segoe: '"Segoe UI", Tahoma, sans-serif',
+  calibri: 'Calibri, "Segoe UI", sans-serif',
+  tahoma: 'Tahoma, Arial, sans-serif',
+  verdana: 'Verdana, Geneva, sans-serif',
+  arial: 'Arial, Helvetica, sans-serif',
+  georgia: 'Georgia, "Times New Roman", serif',
+  mono: 'ui-monospace, Consolas, "Courier New", monospace',
+};
+
+const DEFAULT_COLOR = PROFILE_COLORS[0];
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
@@ -16,6 +34,7 @@ function newProfile(name) {
     headers: [],
     responseHeaders: [],
     filters: [],
+    color: DEFAULT_COLOR,
   };
 }
 
@@ -50,8 +69,10 @@ function normalize(raw) {
   for (const p of s.profiles) {
     if (p.requestEnabled === undefined) p.requestEnabled = true;
     if (p.responseEnabled === undefined) p.responseEnabled = true;
+    if (!p.color) p.color = DEFAULT_COLOR;
   }
   if (!s.activeProfileId) s.activeProfileId = s.profiles[0].id;
+  if (!s.settings) s.settings = { font: "default", fontSize: 13 };
   return s;
 }
 
@@ -75,6 +96,87 @@ async function reconcile(hadCache) {
   }
 }
 
+function applySettings() {
+  const st = state.settings || { font: "default", fontSize: 13 };
+  const root = document.documentElement.style;
+  root.setProperty("--ui-font", UI_FONTS[st.font] || UI_FONTS.default);
+  root.setProperty("--row-font-size", (st.fontSize || 13) + "px");
+}
+
+let colorMenu = null;
+
+function closeColorMenu() {
+  if (!colorMenu) return;
+  colorMenu.remove();
+  colorMenu = null;
+  document.removeEventListener("click", onColorDocClick, true);
+}
+
+function onColorDocClick(e) {
+  if (colorMenu && !colorMenu.contains(e.target) && e.target.id !== "profileId") {
+    closeColorMenu();
+  }
+}
+
+function openColorMenu(anchor) {
+  const wasOpen = !!colorMenu;
+  closeColorMenu();
+  if (wasOpen) return;
+  const menu = document.createElement("div");
+  menu.className = "color-menu";
+  const cur = activeProfile().color;
+  PROFILE_COLORS.forEach((col) => {
+    const sw = document.createElement("button");
+    sw.className = "swatch" + (col === cur ? " sel" : "");
+    sw.style.background = col;
+    sw.title = col;
+    sw.addEventListener("click", (e) => {
+      e.stopPropagation();
+      activeProfile().color = col;
+      closeColorMenu();
+      render();
+      save();
+    });
+    menu.appendChild(sw);
+  });
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = r.bottom + 6 + "px";
+  menu.style.left = r.left + "px";
+  document.body.appendChild(menu);
+  colorMenu = menu;
+  setTimeout(() => document.addEventListener("click", onColorDocClick, true), 0);
+}
+
+function closeSettings() {
+  const menu = document.getElementById("settingsMenu");
+  menu.hidden = true;
+  document.removeEventListener("click", onSettingsDocClick, true);
+}
+
+function onSettingsDocClick(e) {
+  const menu = document.getElementById("settingsMenu");
+  if (!menu.contains(e.target) && e.target.id !== "railSettings") {
+    closeSettings();
+  }
+}
+
+function toggleSettings(anchor) {
+  const menu = document.getElementById("settingsMenu");
+  if (!menu.hidden) {
+    closeSettings();
+    return;
+  }
+  menu.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const h = menu.offsetHeight;
+  let top = r.top;
+  if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+  if (top < 8) top = 8;
+  menu.style.top = top + "px";
+  menu.style.left = r.right + 8 + "px";
+  setTimeout(() => document.addEventListener("click", onSettingsDocClick, true), 0);
+}
+
 function activeProfile() {
   return (
     state.profiles.find((p) => p.id === state.activeProfileId) ||
@@ -87,6 +189,7 @@ function activeIndex() {
 }
 
 function render() {
+  applySettings();
   document.body.classList.toggle("paused", !!state.paused);
 
   for (const id of ["railPause", "tbPause"]) {
@@ -99,7 +202,12 @@ function render() {
   const profile = activeProfile();
   const idx = activeIndex() + 1;
 
-  document.getElementById("profileId").textContent = idx;
+  const pid = document.getElementById("profileId");
+  pid.textContent = idx;
+  pid.style.background = profile.color;
+  document.querySelector(".titlebar").style.background = state.paused
+    ? ""
+    : profile.color;
   const nameEl = document.getElementById("profileName");
   if (document.activeElement !== nameEl) nameEl.value = profile.name;
 
@@ -117,6 +225,9 @@ function render() {
   document.getElementById("filterSection").hidden = !hasFilters;
   document.getElementById("applyNote").hidden = hasFilters;
 
+  document.getElementById("fontFamily").value = state.settings.font;
+  document.getElementById("fontSize").value = String(state.settings.fontSize);
+
   updateRuleCount();
 }
 
@@ -133,11 +244,16 @@ function renderRailProfiles() {
     b.className = "rail-pcircle" + (p.id === active.id ? " current" : "");
     b.title = p.name;
     b.textContent = i + 1;
+    b.style.borderColor = p.color;
     if (p.id === active.id) {
+      b.style.background = p.color;
+      b.style.color = "#fff";
       const c = document.createElement("i");
       c.className = "check";
       c.textContent = "✔";
       b.appendChild(c);
+    } else {
+      b.style.color = p.color;
     }
     b.addEventListener("click", () => {
       state.activeProfileId = p.id;
@@ -161,6 +277,7 @@ function renderProfileList() {
     const badge = document.createElement("div");
     badge.className = "pbadge";
     badge.textContent = i + 1;
+    badge.style.background = p.color;
     if (p.id === active.id) {
       const c = document.createElement("i");
       c.className = "pcheck";
@@ -647,6 +764,28 @@ function bindEvents() {
     const file = e.target.files[0];
     if (file) importProfiles(file);
     e.target.value = "";
+  });
+
+  document.getElementById("profileId").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openColorMenu(e.currentTarget);
+  });
+
+  document.getElementById("fontFamily").addEventListener("change", (e) => {
+    state.settings.font = e.target.value;
+    applySettings();
+    save();
+  });
+
+  document.getElementById("fontSize").addEventListener("change", (e) => {
+    state.settings.fontSize = parseInt(e.target.value, 10) || 13;
+    applySettings();
+    save();
+  });
+
+  document.getElementById("railSettings").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleSettings(e.currentTarget);
   });
 
   document.getElementById("requestEnabled").addEventListener("change", (e) => {
