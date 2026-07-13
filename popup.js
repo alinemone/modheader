@@ -1,6 +1,3 @@
-// OpenHeader — popup UI logic
-// All data lives only in chrome.storage.local. Nothing ever leaves your machine.
-
 const STORAGE_KEY = "openheader_state";
 
 let state = { paused: false, profiles: [], activeProfileId: null };
@@ -16,7 +13,7 @@ function newProfile(name) {
     enabled: true,
     requestEnabled: true,
     responseEnabled: true,
-    headers: [], // request headers
+    headers: [],
     responseHeaders: [],
     filters: [],
   };
@@ -26,29 +23,56 @@ function newHeader() {
   return { id: uid(), enabled: true, name: "", value: "", op: "set", label: "" };
 }
 
-// Rows whose optional label field is currently open for editing (in-memory only).
 const labelEditing = new Set();
 
 function newFilter() {
-  return { id: uid(), enabled: true, type: "urls", value: "" };
+  return { id: uid(), enabled: true, value: "" };
 }
 
-async function load() {
-  const data = await chrome.storage.local.get(STORAGE_KEY);
-  state = data[STORAGE_KEY] || { paused: false, profiles: [] };
-  if (!state.profiles || state.profiles.length === 0) {
-    state.profiles = [newProfile()];
+function readCache() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
   }
-  // Backfill fields for older saved data.
-  for (const p of state.profiles) {
+}
+
+function writeCache() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+
+function normalize(raw) {
+  const s = raw || { paused: false, profiles: [] };
+  if (!s.profiles || s.profiles.length === 0) s.profiles = [newProfile()];
+  for (const p of s.profiles) {
     if (p.requestEnabled === undefined) p.requestEnabled = true;
     if (p.responseEnabled === undefined) p.responseEnabled = true;
   }
-  if (!state.activeProfileId) state.activeProfileId = state.profiles[0].id;
+  if (!s.activeProfileId) s.activeProfileId = s.profiles[0].id;
+  return s;
 }
 
 async function save() {
+  writeCache();
   await chrome.storage.local.set({ [STORAGE_KEY]: state });
+}
+
+async function reconcile(hadCache) {
+  const data = await chrome.storage.local.get(STORAGE_KEY);
+  const stored = data[STORAGE_KEY];
+  if (!hadCache && stored) {
+    state = normalize(stored);
+    render();
+    writeCache();
+    return;
+  }
+  if (JSON.stringify(stored) !== JSON.stringify(state)) {
+    writeCache();
+    await chrome.storage.local.set({ [STORAGE_KEY]: state });
+  }
 }
 
 function activeProfile() {
@@ -62,13 +86,9 @@ function activeIndex() {
   return state.profiles.findIndex((p) => p.id === activeProfile().id);
 }
 
-// ---------- Render ----------
-
 function render() {
   document.body.classList.toggle("paused", !!state.paused);
 
-  // Pause buttons flip to a play glyph while paused, so the icon always shows
-  // the action a click will perform (⏸ = pause, ▶ = resume).
   for (const id of ["railPause", "tbPause"]) {
     const btn = document.getElementById(id);
     if (!btn) continue;
@@ -79,12 +99,10 @@ function render() {
   const profile = activeProfile();
   const idx = activeIndex() + 1;
 
-  // Title bar: active profile number + editable name
   document.getElementById("profileId").textContent = idx;
   const nameEl = document.getElementById("profileName");
   if (document.activeElement !== nameEl) nameEl.value = profile.name;
 
-  // Left rail (up to 5 circles) + drawer list (all profiles)
   renderRailProfiles();
   renderProfileList();
 
@@ -92,11 +110,9 @@ function render() {
   renderHeaderRows("responseRows", profile.responseHeaders, "resHeaderNames", "responseEnabled");
   renderFilterRows("filterRows", profile.filters);
 
-  // Section master checkboxes reflect their children.
   updateGroupToggle("requestEnabled", profile.headers);
   updateGroupToggle("responseEnabled", profile.responseHeaders);
 
-  // Filters section is shown once at least one filter exists
   const hasFilters = profile.filters.length > 0;
   document.getElementById("filterSection").hidden = !hasFilters;
   document.getElementById("applyNote").hidden = hasFilters;
@@ -106,7 +122,6 @@ function render() {
 
 let dragId = null;
 
-// Rail: up to 5 profile circles. The default/active one carries the green check.
 const RAIL_MAX = 5;
 
 function renderRailProfiles() {
@@ -133,10 +148,9 @@ function renderRailProfiles() {
   });
 }
 
-// Drawer: full list of profiles. The active/default one carries the green check.
 function renderProfileList() {
   const list = document.getElementById("profileList");
-  const prevScroll = list.scrollTop; // keep scroll position across re-render
+  const prevScroll = list.scrollTop;
   list.innerHTML = "";
   const active = activeProfile();
   state.profiles.forEach((p, i) => {
@@ -168,14 +182,12 @@ function renderProfileList() {
       deleteProfile(p.id);
     });
 
-    // Click makes this profile the default. The drawer stays open.
     item.addEventListener("click", () => {
       state.activeProfileId = p.id;
       render();
       save();
     });
 
-    // Drag to reorder.
     item.addEventListener("dragstart", (e) => {
       dragId = p.id;
       item.classList.add("dragging");
@@ -235,7 +247,6 @@ function reorderProfiles(fromId, toId) {
   save();
 }
 
-// Master checkbox reflects children: checked (all on), indeterminate (mixed), off.
 function updateGroupToggle(id, list) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -248,8 +259,6 @@ function updateGroupToggle(id, list) {
 function renderHeaderRows(containerId, list, datalistId, groupId) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
-  // Build every row off-DOM and attach once, so a long list is a single
-  // layout pass instead of one reflow per row.
   const frag = document.createDocumentFragment();
   list.forEach((h) => {
     const row = document.createElement("div");
@@ -261,7 +270,6 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
     chk.className = "en";
     chk.checked = h.enabled;
 
-    // Optional inline label shown in front of the record.
     let lbl = null;
     if (h.label || labelEditing.has(h.id)) {
       lbl = document.createElement("input");
@@ -277,9 +285,6 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
     name.className = "name";
     name.placeholder = "Name";
     name.value = h.name;
-    // Bind the datalist lazily (only on focus) — a datalist attached to every
-    // input is a real per-input cost in Chrome popups and dominates with many
-    // rows. Stash the id and wire it up in the focusin handler.
     if (datalistId) name.dataset.list = datalistId;
 
     const value = document.createElement("input");
@@ -345,7 +350,6 @@ function updateRuleCount() {
   el.textContent = `Active: ${activeProfile().name}`;
 }
 
-// Debounced save while typing.
 let saveTimer = null;
 function commit() {
   clearTimeout(saveTimer);
@@ -368,8 +372,6 @@ function addProfile() {
   render();
   save();
 }
-
-// ---------- Import / Export (ModHeader-compatible) ----------
 
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -396,7 +398,6 @@ function headerFromModHeader(h) {
   };
 }
 
-// Internal state -> ModHeader export format (array of profiles).
 function toModHeaderExport() {
   return state.profiles.map((p, i) => ({
     title: p.name,
@@ -408,8 +409,7 @@ function toModHeaderExport() {
     urlFilters: (p.filters || []).map((f) => ({
       comment: "",
       enabled: !!f.enabled,
-      urlRegex:
-        f.type === "regex" ? f.value : `.*${escapeRegex(f.value)}.*`,
+      urlRegex: `.*${escapeRegex(f.value)}.*`,
     })),
     cookieHeaders: [],
     cspHeaders: [],
@@ -430,19 +430,17 @@ function toModHeaderExport() {
   }));
 }
 
-// ModHeader import format -> internal profiles.
 function fromModHeaderImport(arr) {
   return arr.map((p) => {
     const prof = newProfile(p.title || p.shortTitle || "Imported");
     prof.headers = (p.headers || []).map(headerFromModHeader);
     prof.responseHeaders = (p.respHeaders || []).map(headerFromModHeader);
     prof.filters = (p.urlFilters || []).map((f) => {
-      // Everything becomes a plain "contains" filter (no regex).
       let v = (f.urlRegex || "").trim();
-      const m = v.match(/^\.\*(.+?)\.\*$/); // strip ModHeader's ".*…​.*" wrapper
+      const m = v.match(/^\.\*(.+?)\.\*$/);
       if (m) v = m[1];
-      v = v.replace(/\\(.)/g, "$1"); // unescape \. -> . etc.
-      return { id: uid(), enabled: f.enabled !== false, type: "urls", value: v };
+      v = v.replace(/\\(.)/g, "$1");
+      return { id: uid(), enabled: f.enabled !== false, value: v };
     });
     return prof;
   });
@@ -470,7 +468,6 @@ async function importProfiles(file) {
     }
     const imported = fromModHeaderImport(arr);
 
-    // Replace the lone empty default profile; otherwise append.
     const p0 = state.profiles[0];
     const onlyEmptyDefault =
       state.profiles.length === 1 &&
@@ -489,10 +486,6 @@ async function importProfiles(file) {
     alert("Import failed: " + e.message);
   }
 }
-
-// ---------- Row event delegation ----------
-// One set of listeners per container (attached once), instead of ~5 per row.
-// This makes building a long header list much cheaper.
 
 function setupHeaderDelegation(containerId) {
   const container = document.getElementById(containerId);
@@ -549,7 +542,6 @@ function setupHeaderDelegation(containerId) {
     }
   });
 
-  // Attach the datalist only while the name field is focused (see renderHeaderRows).
   container.addEventListener("focusin", (e) => {
     const t = e.target;
     if (t.classList.contains("name") && t.dataset.list) {
@@ -557,8 +549,6 @@ function setupHeaderDelegation(containerId) {
     }
   });
 
-  // blur doesn't bubble, so use focusout. Unbind the datalist, and close an
-  // empty label field.
   container.addEventListener("focusout", (e) => {
     const t = e.target;
     if (t.classList.contains("name")) {
@@ -612,8 +602,6 @@ function setupFilterDelegation(containerId) {
   });
 }
 
-// ---------- Events ----------
-
 function bindEvents() {
   setupHeaderDelegation("requestRows");
   setupHeaderDelegation("responseRows");
@@ -628,7 +616,7 @@ function bindEvents() {
   const nameEl = document.getElementById("profileName");
   nameEl.addEventListener("input", () => {
     activeProfile().name = nameEl.value;
-    renderProfileList(); // refresh rail tooltips without stealing focus
+    renderProfileList();
     commit();
   });
   nameEl.addEventListener("blur", () => {
@@ -658,7 +646,7 @@ function bindEvents() {
   document.getElementById("importFile").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (file) importProfiles(file);
-    e.target.value = ""; // allow re-importing the same file
+    e.target.value = "";
   });
 
   document.getElementById("requestEnabled").addEventListener("change", (e) => {
@@ -675,7 +663,6 @@ function bindEvents() {
     save();
   });
 
-  // Both the header "+" and the inline "Add header" button under each list.
   document.querySelectorAll(".mini-add, .add-row").forEach((btn) => {
     btn.addEventListener("click", () => addRow(btn.dataset.target));
   });
@@ -708,7 +695,6 @@ function addRow(target) {
   render();
   save();
 
-  // Focus the newly added row's first input for a smooth ModHeader-like feel.
   const map = { request: "requestRows", response: "responseRows", filter: "filterRows" };
   const rows = document.getElementById(map[target]);
   const last = rows && rows.lastElementChild;
@@ -718,12 +704,11 @@ function addRow(target) {
   }
 }
 
-// ---------- Start ----------
-
-(async function init() {
-  await load();
+(function init() {
+  const cached = readCache();
+  const hadCache = !!(cached && cached.profiles && cached.profiles.length);
+  state = normalize(cached);
   bindEvents();
   render();
-  // No save() on open: opening the popup shouldn't rewrite storage (which would
-  // trigger a full DNR rule rebuild in the background every time).
+  reconcile(hadCache);
 })();

@@ -15,7 +15,6 @@
   font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
 }
 
-/* The `hidden` attribute must win over layout display values (flex/grid). */
 [hidden] {
   display: none !important;
 }
@@ -34,7 +33,6 @@ body {
   max-height: 600px;
 }
 
-/* ---------- ریل چپ آیکونی ---------- */
 .rail {
   width: 44px;
   flex: 0 0 44px;
@@ -121,7 +119,6 @@ body {
   flex: 1;
 }
 
-/* ---------- Drawer پروفایل‌ها ---------- */
 .backdrop {
   position: fixed;
   inset: 0;
@@ -280,7 +277,6 @@ body {
   color: var(--red);
 }
 
-/* ---------- ستون اصلی ---------- */
 .main {
   flex: 1;
   display: flex;
@@ -288,7 +284,6 @@ body {
   min-width: 0;
 }
 
-/* نوار بالا */
 .titlebar {
   display: flex;
   align-items: center;
@@ -312,7 +307,6 @@ body {
 }
 
 .profile-name {
-  /* Looks exactly like a plain label until you click into it. */
   background: transparent;
   border: none;
   outline: none;
@@ -322,7 +316,7 @@ body {
   cursor: default;
   padding: 2px 0;
   margin: 0;
-  field-sizing: content; /* auto-size to text like a label (Chrome 123+) */
+  field-sizing: content;
   min-width: 20px;
   max-width: 240px;
   text-overflow: ellipsis;
@@ -333,7 +327,6 @@ body {
   font-weight: 400;
 }
 
-/* Only when focused does it reveal that it is editable. */
 .profile-name:focus {
   cursor: text;
   border-bottom: 1px solid rgba(255, 255, 255, 0.55);
@@ -359,7 +352,6 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* محتوا */
 .content {
   padding: 12px 14px;
   overflow-y: auto;
@@ -415,7 +407,6 @@ body {
   color: var(--maroon);
 }
 
-/* ردیف‌ها */
 .rows {
   display: flex;
   flex-direction: column;
@@ -529,8 +520,6 @@ body {
   opacity: 0.4;
 }
 
-/* Inline "add header" button that sits directly under the last row, so it's
-   reachable no matter how many headers/filters there are. */
 .add-row {
   width: 100%;
   margin-top: 6px;
@@ -549,7 +538,6 @@ body {
   border-color: #b7c6e6;
 }
 
-/* یادداشت اعمال */
 .apply-note {
   color: var(--muted);
   font-size: 12px;
@@ -557,7 +545,6 @@ body {
   margin: 4px 0 12px;
 }
 
-/* دکمه‌های آبی */
 .cta {
   display: flex;
   gap: 10px;
@@ -587,7 +574,6 @@ body {
   font-size: 12px;
 }
 
-/* فوتر */
 .footer {
   display: flex;
   align-items: center;

@@ -8,7 +8,6 @@
   </head>
   <body>
     <div class="app">
-      <!-- Left icon rail -->
       <aside class="rail">
         <button class="rail-btn menu" id="railMenu" title="All profiles">☰</button>
         <div class="rail-profiles" id="railProfiles"></div>
@@ -18,7 +17,6 @@
         <button class="rail-btn" id="railHelp" title="About">?</button>
       </aside>
 
-      <!-- Profiles drawer (opened by the ☰ button) -->
       <div class="backdrop" id="backdrop" hidden></div>
       <aside class="drawer" id="drawer" hidden>
         <div class="drawer-head">Profiles</div>
@@ -32,7 +30,6 @@
       </aside>
 
       <div class="main">
-        <!-- Maroon title bar -->
         <header class="titlebar">
           <div class="profile-id" id="profileId">1</div>
           <input
@@ -48,7 +45,6 @@
         </header>
 
         <div class="content">
-          <!-- Request headers -->
           <section class="hgroup">
             <div class="hgroup-head">
               <label class="grouptoggle">
@@ -60,7 +56,6 @@
             <button class="add-row" data-target="request">＋ Add header</button>
           </section>
 
-          <!-- Response headers -->
           <section class="hgroup">
             <div class="hgroup-head">
               <label class="grouptoggle">
@@ -72,7 +67,6 @@
             <button class="add-row" data-target="response">＋ Add header</button>
           </section>
 
-          <!-- Filters -->
           <section class="hgroup" id="filterSection" hidden>
             <div class="hgroup-head">
               <span class="gtitle">Filters</span>
@@ -111,7 +105,6 @@
       </div>
     </div>
 
-    <!-- Header-name autocomplete suggestions -->
     <datalist id="reqHeaderNames">
       <option value="Accept"></option>
       <option value="Accept-Charset"></option>
