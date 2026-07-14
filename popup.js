@@ -1,4 +1,4 @@
-const STORAGE_KEY = "openheader_state";
+const STORAGE_KEY = "open_modeheader_state";
 
 let state = { paused: false, profiles: [], activeProfileId: null };
 
@@ -569,7 +569,7 @@ function exportProfiles() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "openheader_profiles.json";
+  a.download = "open_modheader_profiles.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -817,7 +817,7 @@ function bindEvents() {
 
   document.getElementById("railHelp").addEventListener("click", () => {
     alert(
-      "OpenHeader — open-source header modifier.\n\n" +
+      "OpenModHeader — open-source header modifier.\n\n" +
         "• No external servers, no tracking.\n" +
         "• Uses Chrome's declarativeNetRequest API.\n" +
         "• All data stays in local storage on this device.\n\n" +

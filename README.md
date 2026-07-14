@@ -1,4 +1,4 @@
-# OpenHeader
+# OpenModHeader
 
 A tiny, open-source Chrome extension to modify HTTP request/response headers — a clean, transparent alternative to ModHeader.
 

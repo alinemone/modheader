@@ -1,4 +1,4 @@
-const STORAGE_KEY = "openheader_state";
+const STORAGE_KEY = "open_modheader_state";
 
 const ALL_RESOURCE_TYPES = [
   "main_frame",

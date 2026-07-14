@@ -17,6 +17,6 @@ npm-debug.log*
 *.pem
 
 # Exported profiles — may contain real tokens/secrets, never commit
-openheader_profiles*.json
+open_modheader_profiles*.json
 modheader_*.json
 *profiles*.json

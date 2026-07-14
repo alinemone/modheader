@@ -15,7 +15,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "OpenHeader"
+    "default_title": "OpenModHeader"
   },
   "icons": {
     "16": "icons/icon16.png",

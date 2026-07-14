@@ -1,6 +1,6 @@
 <div dir="rtl">
 
-# OpenHeader
+# OpenModHeader
 
 افزونه‌ی کوچک و متن‌باز کروم برای تغییر هدرهای HTTP (درخواست و پاسخ) — جایگزینِ تمیز و شفافِ ModHeader.
 
