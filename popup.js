@@ -1,4 +1,4 @@
-const STORAGE_KEY = "open_modeheader_state";
+const STORAGE_KEY = "openheader_state";
 
 let state = { paused: false, profiles: [], activeProfileId: null };
 
