@@ -44,8 +44,8 @@ function newHeader() {
 
 const labelEditing = new Set();
 
-function newFilter() {
-  return { id: uid(), enabled: true, value: "" };
+function newFilter(value = "", type = "contains") {
+  return { id: uid(), enabled: true, value, type };
 }
 
 function readCache() {
@@ -67,9 +67,23 @@ function normalize(raw) {
   const s = raw || { paused: false, profiles: [] };
   if (!s.profiles || s.profiles.length === 0) s.profiles = [newProfile()];
   for (const p of s.profiles) {
+    if (!p.headers) p.headers = [];
+    if (!p.responseHeaders) p.responseHeaders = [];
+    if (!p.filters) p.filters = [];
     if (p.requestEnabled === undefined) p.requestEnabled = true;
     if (p.responseEnabled === undefined) p.responseEnabled = true;
     if (!p.color) p.color = DEFAULT_COLOR;
+    for (const f of p.filters) {
+      if (!f.id) f.id = uid();
+      if (!f.type) f.type = "contains";
+      if (f.type === "exact" || f.type === "domain") {
+        f.value = filterToRegex(f);
+        f.type = "regex";
+      }
+      if (!["contains", "wildcard", "regex"].includes(f.type)) {
+        f.type = "contains";
+      }
+    }
   }
   if (!s.activeProfileId) s.activeProfileId = s.profiles[0].id;
   if (!s.settings) s.settings = { font: "default", fontSize: 13 };
@@ -227,6 +241,7 @@ function render() {
 
   document.getElementById("fontFamily").value = state.settings.font;
   document.getElementById("fontSize").value = String(state.settings.fontSize);
+  renderExportScope();
 
   updateRuleCount();
 }
@@ -412,8 +427,14 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
 
     const tag = document.createElement("button");
     tag.className = "tag";
-    tag.textContent = "🏷";
+    tag.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+      '<path d="M3.75 5.75v5.1c0 .66.26 1.3.73 1.77l6.9 6.9a1.75 1.75 0 0 0 2.47 0l5.67-5.67a1.75 1.75 0 0 0 0-2.47l-6.9-6.9a2.5 2.5 0 0 0-1.77-.73h-5.1a2 2 0 0 0-2 2Z" />' +
+      '<circle cx="8" cy="8" r="1.25" />' +
+      '<path class="tag-plus" d="M15.75 7.25v5M13.25 9.75h5" />' +
+      "</svg>";
     tag.title = "Add label";
+    tag.setAttribute("aria-label", "Add label");
 
     const del = document.createElement("button");
     del.className = "del";
@@ -433,7 +454,7 @@ function renderFilterRows(containerId, list) {
   const frag = document.createDocumentFragment();
   list.forEach((f) => {
     const row = document.createElement("div");
-    row.className = "row" + (f.enabled ? "" : " disabled");
+    row.className = "row filter-row" + (f.enabled ? "" : " disabled");
     row.dataset.id = f.id;
 
     const chk = document.createElement("input");
@@ -441,10 +462,29 @@ function renderFilterRows(containerId, list) {
     chk.className = "en";
     chk.checked = f.enabled;
 
+    const type = document.createElement("select");
+    type.className = "filter-type";
+    [
+      ["contains", "Contains"],
+      ["wildcard", "Wildcard"],
+      ["regex", "Regex"],
+    ].forEach(([optionValue, label]) => {
+      const option = document.createElement("option");
+      option.value = optionValue;
+      option.textContent = label;
+      type.appendChild(option);
+    });
+    type.value = f.type || "contains";
+
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
-    value.placeholder = "URL contains, e.g. example.com";
+    const placeholders = {
+      contains: "example.com or http://127.0.0.1",
+      wildcard: "*.basalam.*",
+      regex: "^https://(www\\.)?example\\.com/",
+    };
+    value.placeholder = placeholders[f.type || "contains"];
     value.value = f.value;
 
     const del = document.createElement("button");
@@ -452,7 +492,7 @@ function renderFilterRows(containerId, list) {
     del.textContent = "✕";
     del.title = "Remove filter";
 
-    row.append(chk, value, del);
+    row.append(chk, type, value, del);
     frag.appendChild(row);
   });
   container.appendChild(frag);
@@ -494,6 +534,34 @@ function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function wildcardToRegex(value) {
+  return String(value)
+    .split("*")
+    .map(escapeRegex)
+    .join(".*");
+}
+
+function filterToRegex(filter) {
+  const value = String(filter.value || "").trim();
+  switch (filter.type || "contains") {
+    case "wildcard":
+      return wildcardToRegex(value);
+    case "exact":
+      return `^${escapeRegex(value)}$`;
+    case "domain": {
+      const domain = value
+        .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+        .split(/[/?#]/)[0]
+        .replace(/^\.+|\.+$/g, "");
+      return `^https?:\\/\\/(?:[^/]+\\.)?${escapeRegex(domain)}(?::\\d+)?(?:[/?#]|$)`;
+    }
+    case "regex":
+      return value;
+    default:
+      return `.*${escapeRegex(value)}.*`;
+  }
+}
+
 function headerToModHeader(h) {
   return {
     appendMode: h.op === "append",
@@ -515,8 +583,8 @@ function headerFromModHeader(h) {
   };
 }
 
-function toModHeaderExport() {
-  return state.profiles.map((p, i) => ({
+function toModHeaderExport(profiles = state.profiles) {
+  return profiles.map((p, i) => ({
     title: p.name,
     shortTitle: String(i + 1),
     backgroundColor: "#6d071a",
@@ -524,9 +592,11 @@ function toModHeaderExport() {
     headers: (p.headers || []).map(headerToModHeader),
     respHeaders: (p.responseHeaders || []).map(headerToModHeader),
     urlFilters: (p.filters || []).map((f) => ({
-      comment: "",
+      comment: `OpenModHeader:${f.type || "contains"}:${encodeURIComponent(
+        f.value || ""
+      )}`,
       enabled: !!f.enabled,
-      urlRegex: `.*${escapeRegex(f.value)}.*`,
+      urlRegex: filterToRegex(f),
     })),
     cookieHeaders: [],
     cspHeaders: [],
@@ -554,22 +624,73 @@ function fromModHeaderImport(arr) {
     prof.responseHeaders = (p.respHeaders || []).map(headerFromModHeader);
     prof.filters = (p.urlFilters || []).map((f) => {
       let v = (f.urlRegex || "").trim();
-      const m = v.match(/^\.\*(.+?)\.\*$/);
-      if (m) v = m[1];
-      v = v.replace(/\\(.)/g, "$1");
-      return { id: uid(), enabled: f.enabled !== false, value: v };
+      const tagged = /^OpenModHeader:(contains|wildcard|exact|domain|regex)(?::(.*))?$/.exec(
+        f.comment || ""
+      );
+      let type = tagged ? tagged[1] : "regex";
+      if (tagged && tagged[2] !== undefined) {
+        try {
+          v = decodeURIComponent(tagged[2]);
+        } catch (e) {}
+      } else if (!tagged) {
+        const containsMatch = v.match(/^\.\*(.+?)\.\*$/);
+        if (containsMatch) {
+          type = "contains";
+          v = containsMatch[1].replace(/\\(.)/g, "$1");
+        }
+      }
+      if (type === "exact" || type === "domain") {
+        v = filterToRegex({ type, value: v });
+        type = "regex";
+      }
+      if (!["contains", "wildcard", "regex"].includes(type)) type = "contains";
+      return newFilter(v, type);
     });
     return prof;
   });
 }
 
+function renderExportScope() {
+  const select = document.getElementById("exportScope");
+  const previous = select.value || "all";
+  select.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "all";
+  all.textContent = `All profiles (${state.profiles.length})`;
+  select.appendChild(all);
+  state.profiles.forEach((profile, index) => {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = `${index + 1}. ${profile.name}`;
+    select.appendChild(option);
+  });
+  select.value = Array.from(select.options).some((o) => o.value === previous)
+    ? previous
+    : "all";
+}
+
+function safeFilename(value) {
+  return String(value || "profile")
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80) || "profile";
+}
+
 function exportProfiles() {
-  const json = JSON.stringify(toModHeaderExport(), null, 2);
+  const scope = document.getElementById("exportScope").value;
+  const profiles =
+    scope === "all" ? state.profiles : state.profiles.filter((p) => p.id === scope);
+  if (profiles.length === 0) return;
+  const json = JSON.stringify(toModHeaderExport(profiles), null, 2);
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "open_modheader_profiles.json";
+  a.download =
+    scope === "all"
+      ? "open_modheader_profiles.json"
+      : `open_modheader_${safeFilename(profiles[0].name)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -598,6 +719,7 @@ async function importProfiles(file) {
     state.activeProfileId = imported[0].id;
     render();
     save();
+    closeSettings();
     alert(`Imported ${imported.length} profile(s).`);
   } catch (e) {
     alert("Import failed: " + e.message);
@@ -692,11 +814,17 @@ function setupFilterDelegation(containerId) {
   };
 
   container.addEventListener("change", (e) => {
-    if (!e.target.classList.contains("en")) return;
     const c = find(e);
     if (!c) return;
-    c.f.enabled = e.target.checked;
-    c.row.classList.toggle("disabled", !c.f.enabled);
+    if (e.target.classList.contains("en")) {
+      c.f.enabled = e.target.checked;
+      c.row.classList.toggle("disabled", !c.f.enabled);
+    } else if (e.target.classList.contains("filter-type")) {
+      c.f.type = e.target.value;
+      renderFilterRows("filterRows", c.list);
+    } else {
+      return;
+    }
     commit();
   });
 
@@ -709,13 +837,14 @@ function setupFilterDelegation(containerId) {
   });
 
   container.addEventListener("click", (e) => {
-    if (!e.target.classList.contains("del")) return;
     const c = find(e);
     if (!c) return;
-    const i = c.list.indexOf(c.f);
-    if (i >= 0) c.list.splice(i, 1);
-    render();
-    commit();
+    if (e.target.classList.contains("del")) {
+      const i = c.list.indexOf(c.f);
+      if (i >= 0) c.list.splice(i, 1);
+      render();
+      commit();
+    }
   });
 }
 
@@ -734,6 +863,7 @@ function bindEvents() {
   nameEl.addEventListener("input", () => {
     activeProfile().name = nameEl.value;
     renderProfileList();
+    renderExportScope();
     commit();
   });
   nameEl.addEventListener("blur", () => {
@@ -758,6 +888,7 @@ function bindEvents() {
 
   document.getElementById("exportBtn").addEventListener("click", exportProfiles);
   document.getElementById("importBtn").addEventListener("click", () => {
+    closeSettings();
     document.getElementById("importFile").click();
   });
   document.getElementById("importFile").addEventListener("change", (e) => {
@@ -815,22 +946,33 @@ function bindEvents() {
     addRow("filter");
   });
 
+  const helpOverlay = document.getElementById("helpOverlay");
+  const closeHelp = () => {
+    helpOverlay.hidden = true;
+    document.body.classList.remove("help-open");
+  };
+
   document.getElementById("railHelp").addEventListener("click", () => {
-    alert(
-      "OpenModHeader — open-source header modifier.\n\n" +
-        "• No external servers, no tracking.\n" +
-        "• Uses Chrome's declarativeNetRequest API.\n" +
-        "• All data stays in local storage on this device.\n\n" +
-        "Source: https://github.com/alinemone/modheader"
-    );
+    closeDrawer();
+    closeSettings();
+    document.body.classList.add("help-open");
+    helpOverlay.hidden = false;
+    document.getElementById("helpClose").focus();
+  });
+  document.getElementById("helpClose").addEventListener("click", closeHelp);
+  helpOverlay.addEventListener("click", (e) => {
+    if (e.target === helpOverlay) closeHelp();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !helpOverlay.hidden) closeHelp();
   });
 }
 
-function addRow(target) {
+function addRow(target, item = null) {
   const p = activeProfile();
   if (target === "request") p.headers.push(newHeader());
   else if (target === "response") p.responseHeaders.push(newHeader());
-  else if (target === "filter") p.filters.push(newFilter());
+  else if (target === "filter") p.filters.push(item || newFilter());
   render();
   save();
 

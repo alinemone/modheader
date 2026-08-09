@@ -43,7 +43,31 @@ function buildConditions(profile) {
   for (const f of includes) {
     const value = f.value.trim();
     if (!isAscii(value)) continue;
-    conditions.push({ resourceTypes: ALL_RESOURCE_TYPES, urlFilter: value });
+    const base = { resourceTypes: ALL_RESOURCE_TYPES };
+    switch (f.type || "contains") {
+      case "exact":
+        conditions.push({ ...base, urlFilter: `|${value}|` });
+        break;
+      case "domain": {
+        const domain = value
+          .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+          .split(/[/?#]/)[0]
+          .replace(/^\.+|\.+$/g, "");
+        if (domain) conditions.push({ ...base, urlFilter: `||${domain}^` });
+        break;
+      }
+      case "regex":
+        try {
+          new RegExp(value);
+          conditions.push({ ...base, regexFilter: value });
+        } catch (e) {}
+        break;
+      case "wildcard":
+      case "contains":
+      default:
+        conditions.push({ ...base, urlFilter: value });
+        break;
+    }
   }
   return conditions;
 }

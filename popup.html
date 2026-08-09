@@ -126,11 +126,74 @@
           <option value="18">18</option>
         </select>
       </div>
+      <div class="da-row export-row">
+        <span>Export</span>
+        <select id="exportScope" title="Choose profiles to export">
+          <option value="all">All profiles</option>
+        </select>
+      </div>
       <div class="settings-io">
         <button id="importBtn" title="Import ModHeader JSON">⭳ Import</button>
         <button id="exportBtn" title="Export as ModHeader JSON">⭱ Export</button>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden />
+    </div>
+
+    <div class="help-overlay" id="helpOverlay" hidden>
+      <section
+        class="help-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="helpTitle"
+      >
+        <header class="help-head">
+          <div>
+            <h2 id="helpTitle">OpenModHeader Filter Guide</h2>
+            <p>Choose which request URLs receive your header modifications.</p>
+          </div>
+          <button id="helpClose" type="button" title="Close help" aria-label="Close help">✕</button>
+        </header>
+
+        <div class="help-content">
+          <article class="help-card">
+            <h3>Contains</h3>
+            <p>Matches when the entered text appears anywhere in the request URL.</p>
+            <code>google.com</code>
+            <p class="help-example">Matches <b>https://www.google.com/search</b> and every other URL containing <b>google.com</b>.</p>
+            <p class="help-warning">This is a broad match and can also match a domain such as <b>notgoogle.com</b>. Use Regex for strict domain matching.</p>
+          </article>
+
+          <article class="help-card">
+            <h3>Wildcard</h3>
+            <p>Use <code>*</code> to represent any number of characters.</p>
+            <code>*://*.google.com/*</code>
+            <p class="help-example">Matches <b>https://www.google.com/search</b> and URLs on Google subdomains.</p>
+          </article>
+
+          <article class="help-card">
+            <h3>Regex</h3>
+            <p>Use a regular expression for advanced and strict URL matching.</p>
+            <code>^https://([^/]+\.)?google\.com/</code>
+            <p class="help-example">Matches HTTPS requests to <b>google.com</b> and its subdomains.</p>
+          </article>
+
+          <section class="help-rules">
+            <h3>Important behavior</h3>
+            <ul>
+              <li>Multiple enabled filters use OR logic: matching any one filter is enough.</li>
+              <li>A disabled filter is ignored.</li>
+              <li>With no filters, modifications apply to all URLs.</li>
+              <li>Only the currently active profile is applied.</li>
+              <li>Pause disables all modifications.</li>
+            </ul>
+          </section>
+
+          <p class="help-privacy">
+            No external servers or tracking. All settings stay on this device.
+            <a href="https://github.com/alinemone/modheader" target="_blank" rel="noopener">View source on GitHub</a>
+          </p>
+        </div>
+      </section>
     </div>
 
     <datalist id="reqHeaderNames">
