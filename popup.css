@@ -452,6 +452,76 @@ body.help-open .app {
   padding: 3px 0;
 }
 
+.header-row {
+  position: relative;
+}
+
+.header-row.dragging {
+  opacity: 0.42;
+}
+
+.header-row.drop-before::before,
+.header-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 2;
+  border-radius: 2px;
+  background: var(--blue);
+  pointer-events: none;
+}
+
+.header-row.drop-before::before {
+  top: -2px;
+}
+
+.header-row.drop-after::after {
+  bottom: -2px;
+}
+
+.row .drag-handle {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 22px;
+  padding: 2px 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #69717c;
+  opacity: 0.65;
+  cursor: grab;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.row .drag-handle:active {
+  cursor: grabbing;
+}
+
+.row .drag-handle:hover {
+  background: #f5f6f7;
+  color: var(--blue);
+  opacity: 1;
+}
+
+.row .drag-handle:focus-visible {
+  outline: 1px solid var(--blue);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.row .drag-handle svg {
+  display: block;
+  width: 6px;
+  height: 16px;
+  margin: 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 .row .tag {
   flex: 0 0 auto;
   width: 24px;

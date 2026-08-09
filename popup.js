@@ -70,6 +70,9 @@ function normalize(raw) {
     if (!p.headers) p.headers = [];
     if (!p.responseHeaders) p.responseHeaders = [];
     if (!p.filters) p.filters = [];
+    for (const h of [...p.headers, ...p.responseHeaders]) {
+      if (!h.id) h.id = uid();
+    }
     if (p.requestEnabled === undefined) p.requestEnabled = true;
     if (p.responseEnabled === undefined) p.responseEnabled = true;
     if (!p.color) p.color = DEFAULT_COLOR;
@@ -247,6 +250,54 @@ function render() {
 }
 
 let dragId = null;
+let headerDrag = null;
+let headerDragPointerY = null;
+let headerAutoScrollFrame = null;
+
+function getHeaderAutoScrollSpeed(pointerY, top, bottom) {
+  const edge = 56;
+  const maxSpeed = 14;
+  if (pointerY < top + edge) {
+    return -Math.ceil(Math.min(1, (top + edge - pointerY) / edge) * maxSpeed);
+  }
+  if (pointerY > bottom - edge) {
+    return Math.ceil(Math.min(1, (pointerY - (bottom - edge)) / edge) * maxSpeed);
+  }
+  return 0;
+}
+
+function runHeaderAutoScroll() {
+  if (!headerDrag || headerDragPointerY === null) {
+    headerAutoScrollFrame = null;
+    return;
+  }
+  const scrollArea = document.querySelector(".content");
+  if (scrollArea) {
+    const rect = scrollArea.getBoundingClientRect();
+    const speed = getHeaderAutoScrollSpeed(
+      headerDragPointerY,
+      rect.top,
+      rect.bottom
+    );
+    if (speed) scrollArea.scrollTop += speed;
+  }
+  headerAutoScrollFrame = requestAnimationFrame(runHeaderAutoScroll);
+}
+
+function updateHeaderAutoScroll(pointerY) {
+  headerDragPointerY = pointerY;
+  if (headerAutoScrollFrame === null) {
+    headerAutoScrollFrame = requestAnimationFrame(runHeaderAutoScroll);
+  }
+}
+
+function stopHeaderAutoScroll() {
+  headerDragPointerY = null;
+  if (headerAutoScrollFrame !== null) {
+    cancelAnimationFrame(headerAutoScrollFrame);
+    headerAutoScrollFrame = null;
+  }
+}
 
 const RAIL_MAX = 5;
 
@@ -394,8 +445,19 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
   const frag = document.createDocumentFragment();
   list.forEach((h) => {
     const row = document.createElement("div");
-    row.className = "row" + (h.enabled ? "" : " disabled");
+    row.className = "row header-row" + (h.enabled ? "" : " disabled");
     row.dataset.id = h.id;
+
+    const dragHandle = document.createElement("button");
+    dragHandle.type = "button";
+    dragHandle.className = "drag-handle";
+    dragHandle.draggable = true;
+    dragHandle.title = "Drag to reorder header";
+    dragHandle.setAttribute("aria-label", "Drag to reorder header");
+    dragHandle.innerHTML =
+      '<svg viewBox="0 0 12 18" aria-hidden="true">' +
+      '<path d="M6 3.5v11" />' +
+      "</svg>";
 
     const chk = document.createElement("input");
     chk.type = "checkbox";
@@ -441,8 +503,8 @@ function renderHeaderRows(containerId, list, datalistId, groupId) {
     del.textContent = "✕";
     del.title = "Remove";
 
-    if (lbl) row.append(chk, name, value, lbl, tag, del);
-    else row.append(chk, name, value, tag, del);
+    if (lbl) row.append(dragHandle, chk, name, value, lbl, tag, del);
+    else row.append(dragHandle, chk, name, value, tag, del);
     frag.appendChild(row);
   });
   container.appendChild(frag);
@@ -740,6 +802,59 @@ function setupHeaderDelegation(containerId) {
     return h ? { row, h, list, groupId } : null;
   };
 
+  const clearDropState = () => {
+    container.querySelectorAll(".header-row").forEach((row) => {
+      row.classList.remove("dragging", "drop-before", "drop-after");
+    });
+  };
+
+  container.addEventListener("dragstart", (e) => {
+    if (!e.target.closest(".drag-handle")) {
+      e.preventDefault();
+      return;
+    }
+    const c = find(e);
+    if (!c) return;
+    headerDrag = { containerId, headerId: c.h.id };
+    updateHeaderAutoScroll(e.clientY);
+    c.row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", c.h.id);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    if (!headerDrag || headerDrag.containerId !== containerId) return;
+    const c = find(e);
+    if (!c || c.h.id === headerDrag.headerId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    container.querySelectorAll(".header-row").forEach((row) => {
+      row.classList.remove("drop-before", "drop-after");
+    });
+    const after = e.clientY >= c.row.getBoundingClientRect().top + c.row.offsetHeight / 2;
+    c.row.classList.add(after ? "drop-after" : "drop-before");
+  });
+
+  container.addEventListener("drop", (e) => {
+    if (!headerDrag || headerDrag.containerId !== containerId) return;
+    const c = find(e);
+    if (!c || c.h.id === headerDrag.headerId) return;
+    e.preventDefault();
+    const after = c.row.classList.contains("drop-after");
+    reorderHeaders(c.list, headerDrag.headerId, c.h.id, after);
+    headerDrag = null;
+    stopHeaderAutoScroll();
+    clearDropState();
+    render();
+    save();
+  });
+
+  container.addEventListener("dragend", () => {
+    headerDrag = null;
+    stopHeaderAutoScroll();
+    clearDropState();
+  });
+
   container.addEventListener("change", (e) => {
     if (!e.target.classList.contains("en")) return;
     const c = find(e);
@@ -771,7 +886,7 @@ function setupHeaderDelegation(containerId) {
       labelEditing.delete(c.h.id);
       render();
       commit();
-    } else if (t.classList.contains("tag")) {
+    } else if (t.closest(".tag")) {
       const c = find(e);
       if (!c) return;
       labelEditing.add(c.h.id);
@@ -801,6 +916,19 @@ function setupHeaderDelegation(containerId) {
       render();
     }
   });
+}
+
+function reorderHeaders(list, fromId, toId, placeAfter) {
+  if (!fromId || fromId === toId) return;
+  const fromIndex = list.findIndex((h) => h.id === fromId);
+  if (fromIndex < 0) return;
+  const [moved] = list.splice(fromIndex, 1);
+  const targetIndex = list.findIndex((h) => h.id === toId);
+  if (targetIndex < 0) {
+    list.splice(fromIndex, 0, moved);
+    return;
+  }
+  list.splice(targetIndex + (placeAfter ? 1 : 0), 0, moved);
 }
 
 function setupFilterDelegation(containerId) {
@@ -852,6 +980,12 @@ function bindEvents() {
   setupHeaderDelegation("requestRows");
   setupHeaderDelegation("responseRows");
   setupFilterDelegation("filterRows");
+
+  document.querySelector(".content").addEventListener("dragover", (e) => {
+    if (!headerDrag) return;
+    e.preventDefault();
+    updateHeaderAutoScroll(e.clientY);
+  });
 
   document.getElementById("railAddProfile").addEventListener("click", addProfile);
   document.getElementById("tbAdd").addEventListener("click", addProfile);
