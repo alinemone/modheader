@@ -185,6 +185,80 @@ function toggleSettings(anchor) {
   setTimeout(() => document.addEventListener("click", onSettingsDocClick, true), 0);
 }
 
+function closeFilterMenu() {
+  const menu = document.getElementById("filterMenu");
+  const btn = document.getElementById("filterMenuBtn");
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  if (btn) btn.setAttribute("aria-expanded", "false");
+  document.removeEventListener("click", onFilterMenuDocClick, true);
+}
+
+function onFilterMenuDocClick(e) {
+  const split = document.querySelector(".filter-split");
+  if (!split || !split.contains(e.target)) closeFilterMenu();
+}
+
+function toggleFilterMenu() {
+  const menu = document.getElementById("filterMenu");
+  const btn = document.getElementById("filterMenuBtn");
+  if (!menu || !btn) return;
+  if (!menu.hidden) {
+    closeFilterMenu();
+    return;
+  }
+  menu.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  positionFilterMenu();
+  setTimeout(() => document.addEventListener("click", onFilterMenuDocClick, true), 0);
+}
+
+function positionFilterMenu() {
+  const menu = document.getElementById("filterMenu");
+  const btn = document.getElementById("filterMenuBtn");
+  if (!menu || !btn) return;
+
+  requestAnimationFrame(() => {
+    const btnRect = btn.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const gap = 6;
+    const margin = 6;
+    const left = Math.min(
+      btnRect.left,
+      Math.max(margin, window.innerWidth - menuRect.width - margin)
+    );
+    const top = Math.min(
+      btnRect.bottom + gap,
+      Math.max(margin, window.innerHeight - menuRect.height - margin)
+    );
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  });
+}
+
+async function getCurrentTabHost() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = tabs && tabs[0] && tabs[0].url;
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    return parsed.hostname;
+  } catch (e) {
+    return "";
+  }
+}
+
+async function addCurrentDomainFilter() {
+  closeFilterMenu();
+  const host = await getCurrentTabHost();
+  if (!host) {
+    alert("Current tab URL cannot be used as a filter.");
+    return;
+  }
+  addRow("filter", newFilter(host));
+}
+
 function activeProfile() {
   return (
     state.profiles.find((p) => p.id === state.activeProfileId) ||
@@ -1049,6 +1123,13 @@ function bindEvents() {
   document.getElementById("filterBtn").addEventListener("click", () => {
     addRow("filter");
   });
+  document.getElementById("filterMenuBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleFilterMenu();
+  });
+  document.getElementById("filterCurrentDomain").addEventListener("click", () => {
+    addCurrentDomainFilter();
+  });
 
   const helpOverlay = document.getElementById("helpOverlay");
   const closeHelp = () => {
@@ -1068,6 +1149,7 @@ function bindEvents() {
     if (e.target === helpOverlay) closeHelp();
   });
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeFilterMenu();
     if (e.key === "Escape" && !helpOverlay.hidden) closeHelp();
   });
 }

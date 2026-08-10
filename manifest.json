@@ -5,6 +5,7 @@
   "description": "Open-source, transparent HTTP request/response header modifier. No tracking, no external servers.",
   "permissions": [
     "declarativeNetRequest",
+    "activeTab",
     "storage"
   ],
   "host_permissions": [

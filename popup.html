@@ -80,9 +80,25 @@
             <button class="btn-blue" id="modBtn">
               <span class="ico">＋</span> MOD
             </button>
-            <button class="btn-blue" id="filterBtn">
-              <span class="ico">▼</span> FILTER
-            </button>
+            <div class="filter-split">
+              <button
+                class="btn-blue filter-menu-btn"
+                id="filterMenuBtn"
+                title="Filter options"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                ▼
+              </button>
+              <button class="btn-blue filter-main-btn" id="filterBtn">
+                FILTER
+              </button>
+              <div class="filter-menu" id="filterMenu" hidden>
+                <button type="button" id="filterCurrentDomain">
+                  Filter current domain?
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
