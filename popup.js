@@ -28,9 +28,6 @@ function newProfile(name) {
   return {
     id: uid(),
     name: name || "Profile 1",
-    enabled: true,
-    requestEnabled: true,
-    responseEnabled: true,
     headers: [],
     responseHeaders: [],
     filters: [],
@@ -44,8 +41,8 @@ function newHeader() {
 
 const labelEditing = new Set();
 
-function newFilter(value = "", type = "host") {
-  return { id: uid(), enabled: true, value, type };
+function newFilter(value = "") {
+  return { id: uid(), enabled: true, value };
 }
 
 function readCache() {
@@ -73,22 +70,13 @@ function normalize(raw) {
     for (const h of [...p.headers, ...p.responseHeaders]) {
       if (!h.id) h.id = uid();
     }
-    if (p.requestEnabled === undefined) p.requestEnabled = true;
-    if (p.responseEnabled === undefined) p.responseEnabled = true;
+    delete p.enabled;
+    delete p.requestEnabled;
+    delete p.responseEnabled;
     if (!p.color) p.color = DEFAULT_COLOR;
     for (const f of p.filters) {
       if (!f.id) f.id = uid();
-      if (!f.type) f.type = "host";
-      if (["contains", "wildcard", "domain"].includes(f.type)) {
-        f.type = "host";
-      }
-      if (f.type === "exact") {
-        f.value = filterToRegex(f);
-        f.type = "regex";
-      }
-      if (!["host", "regex"].includes(f.type)) {
-        f.type = "host";
-      }
+      delete f.type;
     }
   }
   if (!s.activeProfileId) s.activeProfileId = s.profiles[0].id;
@@ -234,8 +222,8 @@ function render() {
   renderRailProfiles();
   renderProfileList();
 
-  renderHeaderRows("requestRows", profile.headers, "reqHeaderNames", "requestEnabled");
-  renderHeaderRows("responseRows", profile.responseHeaders, "resHeaderNames", "responseEnabled");
+  renderHeaderRows("requestRows", profile.headers, "reqHeaderNames");
+  renderHeaderRows("responseRows", profile.responseHeaders, "resHeaderNames");
   renderFilterRows("filterRows", profile.filters);
 
   updateGroupToggle("requestEnabled", profile.headers);
@@ -442,7 +430,7 @@ function updateGroupToggle(id, list) {
   el.checked = total > 0 && on === total;
 }
 
-function renderHeaderRows(containerId, list, datalistId, groupId) {
+function renderHeaderRows(containerId, list, datalistId) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
   const frag = document.createDocumentFragment();
@@ -530,7 +518,7 @@ function renderFilterRows(containerId, list) {
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
-    value.placeholder = "*.google.*, localhost, 127.0.0.1, https://order.basalam.com";
+    value.placeholder = "*.google.*, localhost, 127.0.0.1, https://order.site.com";
     value.value = f.value;
 
     const del = document.createElement("button");
@@ -618,27 +606,7 @@ function hostPatternToRegex(value) {
 }
 
 function filterToRegex(filter) {
-  const value = String(filter.value || "").trim();
-  switch (filter.type || "host") {
-    case "host":
-      return hostPatternToRegex(value);
-    case "wildcard":
-    case "contains":
-      return hostPatternToRegex(value);
-    case "exact":
-      return `^${escapeRegex(value)}$`;
-    case "domain": {
-      const domain = value
-        .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
-        .split(/[/?#]/)[0]
-        .replace(/^\.+|\.+$/g, "");
-      return `^https?:\\/\\/(?:[^/]+\\.)?${escapeRegex(domain)}(?::\\d+)?(?:[/?#]|$)`;
-    }
-    case "regex":
-      return value;
-    default:
-      return hostPatternToRegex(value);
-  }
+  return hostPatternToRegex(filter.value);
 }
 
 function headerToModHeader(h) {
@@ -671,9 +639,7 @@ function toModHeaderExport(profiles = state.profiles) {
     headers: (p.headers || []).map(headerToModHeader),
     respHeaders: (p.responseHeaders || []).map(headerToModHeader),
     urlFilters: (p.filters || []).map((f) => ({
-      comment: `OpenModHeader:${f.type || "host"}:${encodeURIComponent(
-        f.value || ""
-      )}`,
+      comment: `OpenModHeader:host:${encodeURIComponent(f.value || "")}`,
       enabled: !!f.enabled,
       urlRegex: filterToRegex(f),
     })),
@@ -703,30 +669,18 @@ function fromModHeaderImport(arr) {
     prof.responseHeaders = (p.respHeaders || []).map(headerFromModHeader);
     prof.filters = (p.urlFilters || []).map((f) => {
       let v = (f.urlRegex || "").trim();
-      const tagged = /^OpenModHeader:(host|contains|wildcard|exact|domain|regex)(?::(.*))?$/.exec(
-        f.comment || ""
-      );
-      let type = tagged ? tagged[1] : "regex";
-      if (tagged && tagged[2] !== undefined) {
+      const tagged = /^OpenModHeader:[^:]+(?::(.*))?$/.exec(f.comment || "");
+      if (tagged && tagged[1] !== undefined) {
         try {
-          v = decodeURIComponent(tagged[2]);
+          v = decodeURIComponent(tagged[1]);
         } catch (e) {}
       } else if (!tagged) {
         const containsMatch = v.match(/^\.\*(.+?)\.\*$/);
         if (containsMatch) {
-          type = "contains";
           v = containsMatch[1].replace(/\\(.)/g, "$1");
         }
       }
-      if (["contains", "wildcard", "domain"].includes(type)) {
-        type = "host";
-      }
-      if (type === "exact") {
-        v = filterToRegex({ type, value: v });
-        type = "regex";
-      }
-      if (!["host", "regex"].includes(type)) type = "host";
-      return newFilter(v, type);
+      return newFilter(v);
     });
     return prof;
   });
@@ -977,7 +931,6 @@ function setupFilterDelegation(containerId) {
     if (!e.target.classList.contains("value")) return;
     const c = find(e);
     if (!c) return;
-    c.f.type = "host";
     c.f.value = e.target.value;
     commit();
   });
@@ -1090,7 +1043,6 @@ function bindEvents() {
   });
 
   document.getElementById("modBtn").addEventListener("click", () => {
-    activeProfile().requestEnabled = true;
     addRow("request");
   });
 

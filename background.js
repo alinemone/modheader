@@ -118,49 +118,13 @@ function buildConditions(profile) {
     const value = String(f.value || "").trim();
     if (!isAscii(value)) continue;
     const base = { resourceTypes: ALL_RESOURCE_TYPES };
-    switch (f.type || "host") {
-      case "host": {
-        const simple = simpleUrlFilterCondition(value, base);
-        if (simple) {
-          conditions.push(simple);
-          break;
-        }
-        const regexFilter = hostPatternToRegex(value);
-        if (regexFilter) conditions.push({ ...base, regexFilter });
-        break;
-      }
-      case "exact":
-        conditions.push({ ...base, urlFilter: `|${value}|` });
-        break;
-      case "domain": {
-        const simple = simpleUrlFilterCondition(value, base);
-        if (simple) {
-          conditions.push(simple);
-          break;
-        }
-        const regexFilter = hostPatternToRegex(value);
-        if (regexFilter) conditions.push({ ...base, regexFilter });
-        break;
-      }
-      case "regex":
-        try {
-          new RegExp(value);
-          conditions.push({ ...base, regexFilter: value });
-        } catch (e) {}
-        break;
-      case "wildcard":
-      case "contains":
-      default: {
-        const simple = simpleUrlFilterCondition(value, base);
-        if (simple) {
-          conditions.push(simple);
-          break;
-        }
-        const regexFilter = hostPatternToRegex(value);
-        if (regexFilter) conditions.push({ ...base, regexFilter });
-        break;
-      }
+    const simple = simpleUrlFilterCondition(value, base);
+    if (simple) {
+      conditions.push(simple);
+      continue;
     }
+    const regexFilter = hostPatternToRegex(value);
+    if (regexFilter) conditions.push({ ...base, regexFilter });
   }
   return conditions;
 }
