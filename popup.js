@@ -44,7 +44,7 @@ function newHeader() {
 
 const labelEditing = new Set();
 
-function newFilter(value = "", type = "contains") {
+function newFilter(value = "", type = "host") {
   return { id: uid(), enabled: true, value, type };
 }
 
@@ -78,13 +78,16 @@ function normalize(raw) {
     if (!p.color) p.color = DEFAULT_COLOR;
     for (const f of p.filters) {
       if (!f.id) f.id = uid();
-      if (!f.type) f.type = "contains";
-      if (f.type === "exact" || f.type === "domain") {
+      if (!f.type) f.type = "host";
+      if (["contains", "wildcard", "domain"].includes(f.type)) {
+        f.type = "host";
+      }
+      if (f.type === "exact") {
         f.value = filterToRegex(f);
         f.type = "regex";
       }
-      if (!["contains", "wildcard", "regex"].includes(f.type)) {
-        f.type = "contains";
+      if (!["host", "regex"].includes(f.type)) {
+        f.type = "host";
       }
     }
   }
@@ -524,29 +527,10 @@ function renderFilterRows(containerId, list) {
     chk.className = "en";
     chk.checked = f.enabled;
 
-    const type = document.createElement("select");
-    type.className = "filter-type";
-    [
-      ["contains", "Contains"],
-      ["wildcard", "Wildcard"],
-      ["regex", "Regex"],
-    ].forEach(([optionValue, label]) => {
-      const option = document.createElement("option");
-      option.value = optionValue;
-      option.textContent = label;
-      type.appendChild(option);
-    });
-    type.value = f.type || "contains";
-
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
-    const placeholders = {
-      contains: "example.com or http://127.0.0.1",
-      wildcard: "*.basalam.*",
-      regex: "^https://(www\\.)?example\\.com/",
-    };
-    value.placeholder = placeholders[f.type || "contains"];
+    value.placeholder = "*.google.*, localhost, 127.0.0.1, https://order.basalam.com";
     value.value = f.value;
 
     const del = document.createElement("button");
@@ -554,7 +538,7 @@ function renderFilterRows(containerId, list) {
     del.textContent = "✕";
     del.title = "Remove filter";
 
-    row.append(chk, type, value, del);
+    row.append(chk, value, del);
     frag.appendChild(row);
   });
   container.appendChild(frag);
@@ -596,18 +580,51 @@ function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function wildcardToRegex(value) {
-  return String(value)
+function hostPatternToRegex(value) {
+  let raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  let scheme = "[a-z][a-z0-9+.-]*";
+  const schemeMatch = raw.match(/^([a-z][a-z0-9+.-]*|\*):\/\//i);
+  if (schemeMatch) {
+    scheme = schemeMatch[1] === "*" ? scheme : escapeRegex(schemeMatch[1]);
+    raw = raw.slice(schemeMatch[0].length);
+  }
+  raw = raw
+    .replace(/^[^@/]+@/, "")
+    .split(/[/?#]/)[0]
+    .replace(/^\.+|\.+$/g, "");
+
+  let port = "";
+  const portMatch = raw.match(/^(.*):(\d+|\*)$/);
+  if (portMatch && !portMatch[1].includes(":")) {
+    raw = portMatch[1];
+    port = portMatch[2] === "*" ? "(?::\\d+)?" : `:${portMatch[2]}`;
+  } else {
+    port = "(?::\\d+)?";
+  }
+
+  if (!raw) return "";
+
+  const optionalLeadingLabels = raw.startsWith("*.");
+  if (optionalLeadingLabels) raw = raw.slice(2);
+
+  const host = raw
     .split("*")
     .map(escapeRegex)
-    .join(".*");
+    .join("[A-Za-z0-9-]*");
+
+  const prefix = optionalLeadingLabels ? "(?:[A-Za-z0-9-]+\\.)*" : "";
+  return `^${scheme}:\\/\\/${prefix}${host}${port}(?:[\\/?#]|$)`;
 }
 
 function filterToRegex(filter) {
   const value = String(filter.value || "").trim();
-  switch (filter.type || "contains") {
+  switch (filter.type || "host") {
+    case "host":
+      return hostPatternToRegex(value);
     case "wildcard":
-      return wildcardToRegex(value);
+    case "contains":
+      return hostPatternToRegex(value);
     case "exact":
       return `^${escapeRegex(value)}$`;
     case "domain": {
@@ -620,7 +637,7 @@ function filterToRegex(filter) {
     case "regex":
       return value;
     default:
-      return `.*${escapeRegex(value)}.*`;
+      return hostPatternToRegex(value);
   }
 }
 
@@ -654,7 +671,7 @@ function toModHeaderExport(profiles = state.profiles) {
     headers: (p.headers || []).map(headerToModHeader),
     respHeaders: (p.responseHeaders || []).map(headerToModHeader),
     urlFilters: (p.filters || []).map((f) => ({
-      comment: `OpenModHeader:${f.type || "contains"}:${encodeURIComponent(
+      comment: `OpenModHeader:${f.type || "host"}:${encodeURIComponent(
         f.value || ""
       )}`,
       enabled: !!f.enabled,
@@ -686,7 +703,7 @@ function fromModHeaderImport(arr) {
     prof.responseHeaders = (p.respHeaders || []).map(headerFromModHeader);
     prof.filters = (p.urlFilters || []).map((f) => {
       let v = (f.urlRegex || "").trim();
-      const tagged = /^OpenModHeader:(contains|wildcard|exact|domain|regex)(?::(.*))?$/.exec(
+      const tagged = /^OpenModHeader:(host|contains|wildcard|exact|domain|regex)(?::(.*))?$/.exec(
         f.comment || ""
       );
       let type = tagged ? tagged[1] : "regex";
@@ -701,11 +718,14 @@ function fromModHeaderImport(arr) {
           v = containsMatch[1].replace(/\\(.)/g, "$1");
         }
       }
-      if (type === "exact" || type === "domain") {
+      if (["contains", "wildcard", "domain"].includes(type)) {
+        type = "host";
+      }
+      if (type === "exact") {
         v = filterToRegex({ type, value: v });
         type = "regex";
       }
-      if (!["contains", "wildcard", "regex"].includes(type)) type = "contains";
+      if (!["host", "regex"].includes(type)) type = "host";
       return newFilter(v, type);
     });
     return prof;
@@ -947,9 +967,6 @@ function setupFilterDelegation(containerId) {
     if (e.target.classList.contains("en")) {
       c.f.enabled = e.target.checked;
       c.row.classList.toggle("disabled", !c.f.enabled);
-    } else if (e.target.classList.contains("filter-type")) {
-      c.f.type = e.target.value;
-      renderFilterRows("filterRows", c.list);
     } else {
       return;
     }
@@ -960,6 +977,7 @@ function setupFilterDelegation(containerId) {
     if (!e.target.classList.contains("value")) return;
     const c = find(e);
     if (!c) return;
+    c.f.type = "host";
     c.f.value = e.target.value;
     commit();
   });

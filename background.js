@@ -29,9 +29,83 @@ function toHeaderSpec(h) {
   return { header: h.name, operation: op, value: h.value ?? "" };
 }
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hostPatternToRegex(value) {
+  let raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  let scheme = "[a-z][a-z0-9+.-]*";
+  const schemeMatch = raw.match(/^([a-z][a-z0-9+.-]*|\*):\/\//i);
+  if (schemeMatch) {
+    scheme = schemeMatch[1] === "*" ? scheme : escapeRegex(schemeMatch[1]);
+    raw = raw.slice(schemeMatch[0].length);
+  }
+  raw = raw
+    .replace(/^[^@/]+@/, "")
+    .split(/[/?#]/)[0]
+    .replace(/^\.+|\.+$/g, "");
+
+  let port = "";
+  const portMatch = raw.match(/^(.*):(\d+|\*)$/);
+  if (portMatch && !portMatch[1].includes(":")) {
+    raw = portMatch[1];
+    port = portMatch[2] === "*" ? "(?::\\d+)?" : `:${portMatch[2]}`;
+  } else {
+    port = "(?::\\d+)?";
+  }
+
+  if (!raw) return "";
+
+  const optionalLeadingLabels = raw.startsWith("*.");
+  if (optionalLeadingLabels) raw = raw.slice(2);
+
+  const host = raw
+    .split("*")
+    .map(escapeRegex)
+    .join("[A-Za-z0-9-]*");
+
+  const prefix = optionalLeadingLabels ? "(?:[A-Za-z0-9-]+\\.)*" : "";
+  return `^${scheme}:\\/\\/${prefix}${host}${port}(?:[\\/?#]|$)`;
+}
+
+function parseFilterInput(value) {
+  let raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+  let scheme = "";
+  const schemeMatch = raw.match(/^([a-z][a-z0-9+.-]*|\*):\/\//i);
+  if (schemeMatch) {
+    scheme = schemeMatch[1] === "*" ? "" : schemeMatch[1];
+    raw = raw.slice(schemeMatch[0].length);
+  }
+  raw = raw
+    .replace(/^[^@/]+@/, "")
+    .split(/[/?#]/)[0]
+    .replace(/^\.+|\.+$/g, "");
+
+  const portMatch = raw.match(/^(.*):(\d+|\*)$/);
+  if (portMatch && !portMatch[1].includes(":")) {
+    raw = portMatch[1];
+  }
+
+  return raw ? { scheme, host: raw } : null;
+}
+
+function simpleUrlFilterCondition(value, base) {
+  const parsed = parseFilterInput(value);
+  if (!parsed || parsed.host.includes("*")) return null;
+  const isIpv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(parsed.host);
+  if (!isIpv4) return null;
+  const urlFilter = parsed.scheme
+    ? `|${parsed.scheme}://${parsed.host}^`
+    : `||${parsed.host}^`;
+  return { ...base, urlFilter };
+}
+
 function buildConditions(profile) {
   const includes = (profile.filters || []).filter(
-    (f) => f.enabled && f.value.trim()
+    (f) => f.enabled && String(f.value || "").trim()
   );
 
   if (includes.length === 0) {
@@ -41,19 +115,31 @@ function buildConditions(profile) {
   const isAscii = (s) => /^[\x00-\x7F]*$/.test(s);
   const conditions = [];
   for (const f of includes) {
-    const value = f.value.trim();
+    const value = String(f.value || "").trim();
     if (!isAscii(value)) continue;
     const base = { resourceTypes: ALL_RESOURCE_TYPES };
-    switch (f.type || "contains") {
+    switch (f.type || "host") {
+      case "host": {
+        const simple = simpleUrlFilterCondition(value, base);
+        if (simple) {
+          conditions.push(simple);
+          break;
+        }
+        const regexFilter = hostPatternToRegex(value);
+        if (regexFilter) conditions.push({ ...base, regexFilter });
+        break;
+      }
       case "exact":
         conditions.push({ ...base, urlFilter: `|${value}|` });
         break;
       case "domain": {
-        const domain = value
-          .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
-          .split(/[/?#]/)[0]
-          .replace(/^\.+|\.+$/g, "");
-        if (domain) conditions.push({ ...base, urlFilter: `||${domain}^` });
+        const simple = simpleUrlFilterCondition(value, base);
+        if (simple) {
+          conditions.push(simple);
+          break;
+        }
+        const regexFilter = hostPatternToRegex(value);
+        if (regexFilter) conditions.push({ ...base, regexFilter });
         break;
       }
       case "regex":
@@ -64,9 +150,16 @@ function buildConditions(profile) {
         break;
       case "wildcard":
       case "contains":
-      default:
-        conditions.push({ ...base, urlFilter: value });
+      default: {
+        const simple = simpleUrlFilterCondition(value, base);
+        if (simple) {
+          conditions.push(simple);
+          break;
+        }
+        const regexFilter = hostPatternToRegex(value);
+        if (regexFilter) conditions.push({ ...base, regexFilter });
         break;
+      }
     }
   }
   return conditions;
@@ -105,10 +198,31 @@ function buildRules(state) {
   return rules;
 }
 
+async function keepSupportedRules(rules) {
+  if (!chrome.declarativeNetRequest.isRegexSupported) return rules;
+  const supported = [];
+  for (const rule of rules) {
+    const regex = rule.condition && rule.condition.regexFilter;
+    if (!regex) {
+      supported.push(rule);
+      continue;
+    }
+    try {
+      const result = await chrome.declarativeNetRequest.isRegexSupported({
+        regex,
+      });
+      if (result.isSupported) supported.push(rule);
+    } catch (e) {
+      supported.push(rule);
+    }
+  }
+  return supported.map((rule, index) => ({ ...rule, id: index + 1 }));
+}
+
 async function syncRules() {
   try {
     const state = await loadState();
-    const newRules = buildRules(state);
+    const newRules = await keepSupportedRules(buildRules(state));
 
     const existing = await chrome.declarativeNetRequest.getDynamicRules();
     const removeRuleIds = existing.map((r) => r.id);

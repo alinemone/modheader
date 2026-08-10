@@ -574,30 +574,6 @@ body.help-open .app {
   outline: none;
 }
 
-.filter-row .filter-type {
-  flex: 0 0 74px;
-  min-width: 0;
-  padding: 5px 2px;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  border-radius: 4px 4px 0 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 500;
-  outline: none;
-  cursor: pointer;
-}
-
-.filter-row .filter-type:hover {
-  background: rgba(0, 0, 0, 0.025);
-}
-
-.filter-row .filter-type:focus {
-  border-bottom-color: var(--blue);
-  background: transparent;
-}
-
 .filter-row .value {
   flex: 1 1 auto;
 }

@@ -156,25 +156,26 @@
 
         <div class="help-content">
           <article class="help-card">
-            <h3>Contains</h3>
-            <p>Matches when the entered text appears anywhere in the request URL.</p>
+            <h3>Exact Host</h3>
+            <p>Enter a host to match only that host.</p>
             <code>google.com</code>
-            <p class="help-example">Matches <b>https://www.google.com/search</b> and every other URL containing <b>google.com</b>.</p>
-            <p class="help-warning">This is a broad match and can also match a domain such as <b>notgoogle.com</b>. Use Regex for strict domain matching.</p>
+            <p class="help-example">Matches <b>https://google.com/search</b>.</p>
+            <p class="help-warning">Does not match <b>www.google.com</b>, <b>sub.google.com</b>, or <b>notgoogle.com</b>.</p>
           </article>
 
           <article class="help-card">
-            <h3>Wildcard</h3>
-            <p>Use <code>*</code> to represent any number of characters.</p>
-            <code>*://*.google.com/*</code>
-            <p class="help-example">Matches <b>https://www.google.com/search</b> and URLs on Google subdomains.</p>
+            <h3>Wildcard Host</h3>
+            <p>Use <code>*</code> inside a host pattern. A leading <code>*.</code> also includes the base host.</p>
+            <code>*.google.*</code>
+            <p class="help-example">Matches <b>www.google.com</b>, <b>sub.google.com</b>, and <b>sub.google.dev</b>.</p>
           </article>
 
           <article class="help-card">
-            <h3>Regex</h3>
-            <p>Use a regular expression for advanced and strict URL matching.</p>
-            <code>^https://([^/]+\.)?google\.com/</code>
-            <p class="help-example">Matches HTTPS requests to <b>google.com</b> and its subdomains.</p>
+            <h3>Local Or URL</h3>
+            <p>Local hosts, IPs, and full URLs are understood automatically.</p>
+            <code>localhost</code>
+            <code>127.0.0.1</code>
+            <code>https://order.basalam.com</code>
           </article>
 
           <section class="help-rules">
