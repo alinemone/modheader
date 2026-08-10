@@ -81,6 +81,9 @@ function normalize(raw) {
   }
   if (!s.activeProfileId) s.activeProfileId = s.profiles[0].id;
   if (!s.settings) s.settings = { font: "default", fontSize: 13 };
+  if (!s.settings.theme) s.settings.theme = "light";
+  if (!s.settings.font) s.settings.font = "default";
+  if (!s.settings.fontSize) s.settings.fontSize = 13;
   return s;
 }
 
@@ -105,13 +108,15 @@ async function reconcile(hadCache) {
 }
 
 function applySettings() {
-  const st = state.settings || { font: "default", fontSize: 13 };
+  const st = state.settings || { theme: "light", font: "default", fontSize: 13 };
   const root = document.documentElement.style;
+  document.documentElement.dataset.theme = st.theme || "light";
   root.setProperty("--ui-font", UI_FONTS[st.font] || UI_FONTS.default);
   root.setProperty("--row-font-size", (st.fontSize || 13) + "px");
 }
 
 let colorMenu = null;
+let filterStatusRun = 0;
 
 function closeColorMenu() {
   if (!colorMenu) return;
@@ -209,6 +214,7 @@ function toggleFilterMenu() {
   }
   menu.hidden = false;
   btn.setAttribute("aria-expanded", "true");
+  renderFilterMenuOptions();
   positionFilterMenu();
   setTimeout(() => document.addEventListener("click", onFilterMenuDocClick, true), 0);
 }
@@ -236,27 +242,188 @@ function positionFilterMenu() {
   });
 }
 
-async function getCurrentTabHost() {
+async function getCurrentTabUrl() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tabs && tabs[0] && tabs[0].url;
   if (!url) return "";
   try {
     const parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) return "";
-    return parsed.hostname;
+    return parsed.href;
   } catch (e) {
     return "";
   }
 }
 
-async function addCurrentDomainFilter() {
-  closeFilterMenu();
-  const host = await getCurrentTabHost();
-  if (!host) {
-    alert("Current tab URL cannot be used as a filter.");
+async function getCurrentTabInfo() {
+  const url = await getCurrentTabUrl();
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return {
+      href: parsed.href,
+      origin: parsed.origin,
+      protocol: parsed.protocol,
+      host: parsed.host,
+      hostname: parsed.hostname,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function parentWildcardHost(hostname) {
+  if (
+    !hostname ||
+    hostname === "localhost" ||
+    /^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname)
+  ) {
+    return "";
+  }
+  const labels = hostname.split(".").filter(Boolean);
+  if (labels.length < 2) return "";
+  const secondLevelSuffixes = new Set(["ac", "co", "com", "edu", "gov", "net", "org"]);
+  const suffixSize =
+    labels.length > 2 &&
+    labels[labels.length - 1].length === 2 &&
+    secondLevelSuffixes.has(labels[labels.length - 2])
+      ? 3
+      : 2;
+  return `*.${labels.slice(-suffixSize).join(".")}`;
+}
+
+function uniqueFilterOptions(options) {
+  const seen = new Set();
+  return options.filter((option) => {
+    if (!option.value || seen.has(option.value)) return false;
+    seen.add(option.value);
+    return true;
+  });
+}
+
+async function buildCurrentTabFilterOptions() {
+  const tab = await getCurrentTabInfo();
+  if (!tab) return [];
+  return uniqueFilterOptions([
+    {
+      value: tab.host,
+      note: "Exact current host",
+    },
+    {
+      value: parentWildcardHost(tab.hostname),
+      note: "Wildcard for this site",
+    },
+    {
+      value: tab.origin,
+      note: "Current origin only",
+    },
+  ]).slice(0, 3);
+}
+
+async function renderFilterMenuOptions() {
+  const container = document.getElementById("filterMenuOptions");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const options = await buildCurrentTabFilterOptions();
+  if (options.length === 0) {
+    const empty = document.createElement("button");
+    empty.type = "button";
+    empty.disabled = true;
+    empty.innerHTML =
+      '<span class="filter-option-value">No current site</span>' +
+      '<span class="filter-option-note">Open an HTTP or HTTPS tab</span>';
+    container.appendChild(empty);
+    positionFilterMenu();
     return;
   }
-  addRow("filter", newFilter(host));
+
+  const frag = document.createDocumentFragment();
+  options.forEach((option) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.title = option.value;
+
+    const value = document.createElement("span");
+    value.className = "filter-option-value";
+    value.textContent = option.value;
+
+    const note = document.createElement("span");
+    note.className = "filter-option-note";
+    note.textContent = option.note;
+
+    btn.append(value, note);
+    btn.addEventListener("click", () => {
+      closeFilterMenu();
+      addRow("filter", newFilter(option.value));
+    });
+    frag.appendChild(btn);
+  });
+  container.appendChild(frag);
+  positionFilterMenu();
+}
+
+function hasEnabledHeaderMods(profile) {
+  return [...(profile.headers || []), ...(profile.responseHeaders || [])].some(
+    (h) => h.enabled && String(h.name || "").trim()
+  );
+}
+
+function filterMatchesUrl(filter, url) {
+  if (!filter.enabled || !String(filter.value || "").trim()) return false;
+  try {
+    return new RegExp(filterToRegex(filter)).test(url);
+  } catch (e) {
+    return false;
+  }
+}
+
+function setFilterStatus(kind, text, title) {
+  const status = document.getElementById("filterStatus");
+  const label = document.getElementById("filterStatusText");
+  if (!status || !label) return;
+  status.classList.remove("active", "inactive");
+  if (kind) status.classList.add(kind);
+  label.textContent = text;
+  status.title = title || text;
+}
+
+async function updateFilterStatus() {
+  const status = document.getElementById("filterStatus");
+  if (!status || document.getElementById("filterSection").hidden) return;
+
+  const run = ++filterStatusRun;
+  setFilterStatus("", "Checking", "Checking current tab match status");
+
+  const profile = activeProfile();
+  const enabledFilters = (profile.filters || []).filter(
+    (f) => f.enabled && String(f.value || "").trim()
+  );
+
+  const url = await getCurrentTabUrl();
+  if (run !== filterStatusRun) return;
+
+  if (!url) {
+    setFilterStatus("inactive", "Unavailable", "Current tab URL cannot be checked");
+    return;
+  }
+  if (state.paused) {
+    setFilterStatus("inactive", "Paused", "All modifications are paused");
+    return;
+  }
+  if (!hasEnabledHeaderMods(profile)) {
+    setFilterStatus("inactive", "No headers", "No enabled headers are configured");
+    return;
+  }
+
+  const matched = enabledFilters.some((f) => filterMatchesUrl(f, url));
+  setFilterStatus(
+    matched ? "active" : "inactive",
+    matched ? "Active on this tab" : "Inactive on this tab",
+    matched
+      ? "Headers are active on the current tab"
+      : "Current tab does not match any enabled filter"
+  );
 }
 
 function activeProfile() {
@@ -287,9 +454,7 @@ function render() {
   const pid = document.getElementById("profileId");
   pid.textContent = idx;
   pid.style.background = profile.color;
-  document.querySelector(".titlebar").style.background = state.paused
-    ? ""
-    : profile.color;
+  document.documentElement.style.setProperty("--profile-color", profile.color);
   const nameEl = document.getElementById("profileName");
   if (document.activeElement !== nameEl) nameEl.value = profile.name;
 
@@ -309,9 +474,11 @@ function render() {
 
   document.getElementById("fontFamily").value = state.settings.font;
   document.getElementById("fontSize").value = String(state.settings.fontSize);
+  document.getElementById("themeMode").value = state.settings.theme || "light";
   renderExportScope();
 
   updateRuleCount();
+  updateFilterStatus();
 }
 
 let dragId = null;
@@ -621,6 +788,7 @@ function commit() {
   saveTimer = setTimeout(() => {
     save();
     updateRuleCount();
+    updateFilterStatus();
   }, 150);
 }
 
@@ -1081,6 +1249,12 @@ function bindEvents() {
     openColorMenu(e.currentTarget);
   });
 
+  document.getElementById("themeMode").addEventListener("change", (e) => {
+    state.settings.theme = e.target.value;
+    applySettings();
+    save();
+  });
+
   document.getElementById("fontFamily").addEventListener("change", (e) => {
     state.settings.font = e.target.value;
     applySettings();
@@ -1126,9 +1300,6 @@ function bindEvents() {
   document.getElementById("filterMenuBtn").addEventListener("click", (e) => {
     e.stopPropagation();
     toggleFilterMenu();
-  });
-  document.getElementById("filterCurrentDomain").addEventListener("click", () => {
-    addCurrentDomainFilter();
   });
 
   const helpOverlay = document.getElementById("helpOverlay");

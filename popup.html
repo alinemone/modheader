@@ -66,6 +66,10 @@
           <section class="hgroup" id="filterSection" hidden>
             <div class="hgroup-head">
               <span class="gtitle">Filters</span>
+              <div class="filter-status" id="filterStatus" title="Current tab match status">
+                <span class="status-dot"></span>
+                <span id="filterStatusText">Checking</span>
+              </div>
               <button class="mini-add" data-target="filter" title="Add filter">＋</button>
             </div>
             <div id="filterRows" class="rows"></div>
@@ -94,9 +98,7 @@
                 FILTER
               </button>
               <div class="filter-menu" id="filterMenu" hidden>
-                <button type="button" id="filterCurrentDomain">
-                  Filter current domain ?
-                </button>
+                <div class="filter-menu-options" id="filterMenuOptions"></div>
               </div>
             </div>
           </div>
@@ -118,6 +120,13 @@
     </div>
 
     <div class="settings-menu" id="settingsMenu" hidden>
+      <div class="da-row">
+        <span>Theme</span>
+        <select id="themeMode">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
       <div class="da-row">
         <span>Font</span>
         <select id="fontFamily">
