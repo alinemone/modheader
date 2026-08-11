@@ -893,6 +893,10 @@ body.paused .titlebar {
   gap: 8px;
 }
 
+.settings-head {
+  display: none;
+}
+
 .da-row {
   display: flex;
   align-items: center;

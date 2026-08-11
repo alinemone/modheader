@@ -1,4 +1,6 @@
 const STORAGE_KEY = "openheader_state";
+const POPUP_PAGE = "src/ui/popup/index.html";
+const SIDE_PANEL_PAGE = "src/ui/sidepanel/index.html";
 
 const ALL_RESOURCE_TYPES = [
   "main_frame",
@@ -19,6 +21,31 @@ const ALL_RESOURCE_TYPES = [
 async function loadState() {
   const data = await chrome.storage.local.get(STORAGE_KEY);
   return data[STORAGE_KEY] || { paused: false, profiles: [] };
+}
+
+function preferredViewMode(state) {
+  const mode = state && state.settings && state.settings.viewMode;
+  return mode === "sidePanel" ? "sidePanel" : "popup";
+}
+
+async function applySurfacePreference(state = null) {
+  try {
+    const currentState = state || (await loadState());
+    const useSidePanel = preferredViewMode(currentState) === "sidePanel";
+
+    await chrome.action.setPopup({ popup: useSidePanel ? "" : POPUP_PAGE });
+
+    if (chrome.sidePanel) {
+      if (useSidePanel) {
+        await chrome.sidePanel.setOptions({ path: SIDE_PANEL_PAGE, enabled: true });
+      } else {
+        await chrome.sidePanel.setOptions({ enabled: false });
+      }
+      await chrome.sidePanel.setPanelBehavior({
+        openPanelOnActionClick: useSidePanel,
+      });
+    }
+  } catch (e) {}
 }
 
 function toHeaderSpec(h) {
@@ -208,10 +235,26 @@ async function syncRules() {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[STORAGE_KEY]) {
     syncRules();
+    applySurfacePreference(changes[STORAGE_KEY].newValue);
   }
 });
 
-chrome.runtime.onInstalled.addListener(syncRules);
-chrome.runtime.onStartup.addListener(syncRules);
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || message.type !== "surfacePreferenceChanged") return false;
+  applySurfacePreference()
+    .then(() => sendResponse({ ok: true }))
+    .catch(() => sendResponse({ ok: false }));
+  return true;
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  syncRules();
+  applySurfacePreference();
+});
+chrome.runtime.onStartup.addListener(() => {
+  syncRules();
+  applySurfacePreference();
+});
 
 syncRules();
+applySurfacePreference();

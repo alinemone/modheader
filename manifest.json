@@ -6,17 +6,21 @@
   "permissions": [
     "declarativeNetRequest",
     "activeTab",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/background.js"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/ui/popup/index.html",
     "default_title": "OpenModHeader"
+  },
+  "side_panel": {
+    "default_path": "src/ui/sidepanel/index.html"
   },
   "icons": {
     "16": "icons/icon16.png",

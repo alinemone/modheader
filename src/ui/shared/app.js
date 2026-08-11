@@ -2,6 +2,27 @@ const STORAGE_KEY = "openheader_state";
 
 let state = { paused: false, profiles: [], activeProfileId: null };
 
+function detectSurface() {
+  const configured =
+    window.OpenModHeaderSurface && window.OpenModHeaderSurface.name;
+  if (configured) return configured;
+
+  const declared = document.documentElement.dataset.surface;
+  if (declared) return declared;
+
+  try {
+    const views =
+      chrome.extension && chrome.extension.getViews
+        ? chrome.extension.getViews({ type: "popup" })
+        : [];
+    return views.includes(window) ? "popup" : "sidePanel";
+  } catch (e) {
+    return "popup";
+  }
+}
+
+document.documentElement.dataset.surface = detectSurface();
+
 const PROFILE_COLORS = [
   "#6d071a", "#d32f2f", "#e8710a", "#c79100", "#2e7d32",
   "#0f766e", "#1a73e8", "#3f51b5", "#7b1fa2", "#455a64",
@@ -19,6 +40,12 @@ const UI_FONTS = {
 };
 
 const DEFAULT_COLOR = PROFILE_COLORS[0];
+const DEFAULT_SETTINGS = {
+  theme: "light",
+  font: "default",
+  fontSize: 13,
+  viewMode: "popup",
+};
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -80,10 +107,13 @@ function normalize(raw) {
     }
   }
   if (!s.activeProfileId) s.activeProfileId = s.profiles[0].id;
-  if (!s.settings) s.settings = { font: "default", fontSize: 13 };
+  if (!s.settings) s.settings = { ...DEFAULT_SETTINGS };
   if (!s.settings.theme) s.settings.theme = "light";
   if (!s.settings.font) s.settings.font = "default";
   if (!s.settings.fontSize) s.settings.fontSize = 13;
+  if (!["popup", "sidePanel"].includes(s.settings.viewMode)) {
+    s.settings.viewMode = "popup";
+  }
   return s;
 }
 
@@ -108,11 +138,26 @@ async function reconcile(hadCache) {
 }
 
 function applySettings() {
-  const st = state.settings || { theme: "light", font: "default", fontSize: 13 };
+  const st = state.settings || DEFAULT_SETTINGS;
   const root = document.documentElement.style;
   document.documentElement.dataset.theme = st.theme || "light";
   root.setProperty("--ui-font", UI_FONTS[st.font] || UI_FONTS.default);
   root.setProperty("--row-font-size", (st.fontSize || 13) + "px");
+}
+
+async function notifySurfacePreference(openNow = false) {
+  try {
+    await chrome.runtime.sendMessage({ type: "surfacePreferenceChanged" });
+  } catch (e) {}
+
+  if (!openNow || state.settings.viewMode !== "sidePanel") return;
+  if (!chrome.sidePanel || !chrome.sidePanel.open) return;
+
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const windowId = tabs && tabs[0] && tabs[0].windowId;
+    if (windowId != null) await chrome.sidePanel.open({ windowId });
+  } catch (e) {}
 }
 
 let colorMenu = null;
@@ -163,6 +208,7 @@ function openColorMenu(anchor) {
 function closeSettings() {
   const menu = document.getElementById("settingsMenu");
   menu.hidden = true;
+  document.body.classList.remove("settings-open");
   document.removeEventListener("click", onSettingsDocClick, true);
 }
 
@@ -180,6 +226,7 @@ function toggleSettings(anchor) {
     return;
   }
   menu.hidden = false;
+  document.body.classList.add("settings-open");
   const r = anchor.getBoundingClientRect();
   const h = menu.offsetHeight;
   let top = r.top;
@@ -369,6 +416,12 @@ function hasEnabledHeaderMods(profile) {
   );
 }
 
+function effectiveFilters(profile) {
+  return (profile.filters || []).filter(
+    (f) => f.enabled && String(f.value || "").trim()
+  );
+}
+
 function filterMatchesUrl(filter, url) {
   if (!filter.enabled || !String(filter.value || "").trim()) return false;
   try {
@@ -396,23 +449,30 @@ async function updateFilterStatus() {
   setFilterStatus("", "Checking", "Checking current tab match status");
 
   const profile = activeProfile();
-  const enabledFilters = (profile.filters || []).filter(
-    (f) => f.enabled && String(f.value || "").trim()
-  );
+  const enabledFilters = effectiveFilters(profile);
 
-  const url = await getCurrentTabUrl();
-  if (run !== filterStatusRun) return;
-
-  if (!url) {
-    setFilterStatus("inactive", "Unavailable", "Current tab URL cannot be checked");
-    return;
-  }
   if (state.paused) {
     setFilterStatus("inactive", "Paused", "All modifications are paused");
     return;
   }
   if (!hasEnabledHeaderMods(profile)) {
     setFilterStatus("inactive", "No headers", "No enabled headers are configured");
+    return;
+  }
+  if (enabledFilters.length === 0) {
+    setFilterStatus(
+      "active",
+      "All tabs",
+      "No enabled filters are configured; headers apply to all requests"
+    );
+    return;
+  }
+
+  const url = await getCurrentTabUrl();
+  if (run !== filterStatusRun) return;
+
+  if (!url) {
+    setFilterStatus("inactive", "Unavailable", "Current tab URL cannot be checked");
     return;
   }
 
@@ -450,11 +510,13 @@ function render() {
 
   const profile = activeProfile();
   const idx = activeIndex() + 1;
+  const profileColor = profile.color || DEFAULT_COLOR;
 
   const pid = document.getElementById("profileId");
   pid.textContent = idx;
-  pid.style.background = profile.color;
-  document.documentElement.style.setProperty("--profile-color", profile.color);
+  pid.style.background = profileColor;
+  document.documentElement.style.setProperty("--profile-color", profileColor);
+  document.documentElement.style.setProperty("--titlebar-bg", profileColor);
   const nameEl = document.getElementById("profileName");
   if (document.activeElement !== nameEl) nameEl.value = profile.name;
 
@@ -468,13 +530,15 @@ function render() {
   updateGroupToggle("requestEnabled", profile.headers);
   updateGroupToggle("responseEnabled", profile.responseHeaders);
 
-  const hasFilters = profile.filters.length > 0;
-  document.getElementById("filterSection").hidden = !hasFilters;
-  document.getElementById("applyNote").hidden = hasFilters;
+  const hasFilterRows = profile.filters.length > 0;
+  const hasEffectiveFilters = effectiveFilters(profile).length > 0;
+  document.getElementById("filterSection").hidden = !hasFilterRows;
+  document.getElementById("applyNote").hidden = hasEffectiveFilters;
 
   document.getElementById("fontFamily").value = state.settings.font;
   document.getElementById("fontSize").value = String(state.settings.fontSize);
   document.getElementById("themeMode").value = state.settings.theme || "light";
+  document.getElementById("surfaceMode").value = state.settings.viewMode || "popup";
   renderExportScope();
 
   updateRuleCount();
@@ -537,7 +601,11 @@ function renderRailProfiles() {
   const wrap = document.getElementById("railProfiles");
   wrap.innerHTML = "";
   const active = activeProfile();
-  state.profiles.slice(0, RAIL_MAX).forEach((p, i) => {
+  const profiles =
+    document.documentElement.dataset.surface === "sidePanel"
+      ? state.profiles
+      : state.profiles.slice(0, RAIL_MAX);
+  profiles.forEach((p, i) => {
     const b = document.createElement("button");
     b.className = "rail-pcircle" + (p.id === active.id ? " current" : "");
     b.title = p.name;
@@ -1267,10 +1335,18 @@ function bindEvents() {
     save();
   });
 
+  document.getElementById("surfaceMode").addEventListener("change", async (e) => {
+    state.settings.viewMode = e.target.value === "sidePanel" ? "sidePanel" : "popup";
+    await save();
+    await notifySurfacePreference(true);
+  });
+
   document.getElementById("railSettings").addEventListener("click", (e) => {
     e.stopPropagation();
     toggleSettings(e.currentTarget);
   });
+
+  document.getElementById("settingsClose").addEventListener("click", closeSettings);
 
   document.getElementById("requestEnabled").addEventListener("change", (e) => {
     const on = e.target.checked;
@@ -1321,6 +1397,9 @@ function bindEvents() {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeFilterMenu();
+    if (e.key === "Escape" && !document.getElementById("settingsMenu").hidden) {
+      closeSettings();
+    }
     if (e.key === "Escape" && !helpOverlay.hidden) closeHelp();
   });
 }
@@ -1348,5 +1427,5 @@ function addRow(target, item = null) {
   state = normalize(cached);
   bindEvents();
   render();
-  reconcile(hadCache);
+  reconcile(hadCache).then(() => notifySurfacePreference(false));
 })();

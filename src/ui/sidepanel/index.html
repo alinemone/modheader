@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en" dir="ltr" data-surface="sidePanel">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenModHeader</title>
-    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <div class="app">
@@ -120,6 +120,10 @@
     </div>
 
     <div class="settings-menu" id="settingsMenu" hidden>
+      <div class="settings-head">
+        <strong>Settings</strong>
+        <button id="settingsClose" type="button" title="Close settings" aria-label="Close settings">✕</button>
+      </div>
       <div class="da-row">
         <span>Theme</span>
         <select id="themeMode">
@@ -149,6 +153,13 @@
           <option value="15">15</option>
           <option value="16">16</option>
           <option value="18">18</option>
+        </select>
+      </div>
+      <div class="da-row">
+        <span>Open as</span>
+        <select id="surfaceMode">
+          <option value="popup">Popup</option>
+          <option value="sidePanel">Side panel</option>
         </select>
       </div>
       <div class="da-row export-row">
@@ -293,6 +304,7 @@
       <option value="X-XSS-Protection"></option>
     </datalist>
 
-    <script src="popup.js"></script>
+    <script src="sidepanel.js"></script>
+    <script src="../shared/app.js"></script>
   </body>
 </html>
