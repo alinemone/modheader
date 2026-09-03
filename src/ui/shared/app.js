@@ -976,6 +976,16 @@ function maskValue(value) {
   return prefix + "••••••••" + raw.slice(-8);
 }
 
+// The eye mirrors whatever the field is showing right now, whether that came
+// from the button or from focusing the input. Single place, so the two paths
+// cannot drift apart.
+function setEyeState(eye, hidden) {
+  if (!eye) return;
+  eye.classList.toggle("on", !hidden);
+  eye.innerHTML = svgIcon(hidden ? "eye" : "eyeoff");
+  eye.title = hidden ? "Reveal value" : "Hide value";
+}
+
 /* ── duplicate detection ──────────────────────────────────────────────────
    background.js puts every enabled header into one modifyHeaders action in
    list order, so for two `set` operations on the same name the later one is
@@ -1100,7 +1110,9 @@ function renderHeaderRows(containerId, list, datalistId) {
     value.className = "value";
     value.placeholder = "Value";
     value.value = hidden ? maskValue(h.value) : h.value;
-    if (hidden) value.readOnly = true;
+    // Masked, not locked: the dots are only what an unfocused field shows.
+    // Focus swaps the real value in so it stays editable (see focusin below).
+    if (hidden) value.dataset.masked = "1";
     l2.appendChild(value);
 
     main.append(l1, l2);
@@ -1113,9 +1125,8 @@ function renderHeaderRows(containerId, list, datalistId) {
     // lands on the same vertical line down the whole list.
     const eye = document.createElement("button");
     eye.type = "button";
-    eye.className = "eye" + (hidden ? "" : " on") + (secret && mask ? "" : " ghost");
-    eye.innerHTML = svgIcon(hidden ? "eye" : "eyeoff");
-    eye.title = hidden ? "Reveal value" : "Hide value";
+    eye.className = "eye" + (secret && mask ? "" : " ghost");
+    setEyeState(eye, hidden);
     if (!(secret && mask)) eye.tabIndex = -1;
     actions.appendChild(eye);
 
@@ -1679,6 +1690,37 @@ function setupHeaderDelegation(containerId) {
     commit();
   });
 
+  // Masking is a display state, not a lock. Clicking into a masked value
+  // shows the real text so it can be edited; leaving it puts the dots back.
+  container.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (!t.classList?.contains("value") || t.dataset.masked !== "1") return;
+    const c = find(e);
+    if (!c) return;
+    t.value = c.h.value;
+    setEyeState(t.closest(".row")?.querySelector(".eye"), false);
+  });
+
+  container.addEventListener("focusout", (e) => {
+    const t = e.target;
+    if (!t.classList?.contains("value")) return;
+    const c = find(e);
+    if (!c) return;
+    const wasMasked = t.dataset.masked === "1";
+    // Re-evaluate: an edit can turn a token into plain text, or the reverse.
+    const shouldMask =
+      looksSecret(c.h) && !!state.settings.maskSecrets && !revealed.has(c.h.id);
+    if (wasMasked === shouldMask) {
+      if (shouldMask) {
+        t.value = maskValue(c.h.value);
+        setEyeState(t.closest(".row")?.querySelector(".eye"), true);
+      }
+      return;
+    }
+    // The row crossed the secret threshold, so its eye button changed too.
+    render();
+  });
+
   container.addEventListener("input", (e) => {
     const t = e.target;
     const c = find(e);
@@ -1692,7 +1734,8 @@ function setupHeaderDelegation(containerId) {
       );
       sizeColumns(container); // the widest key may have just changed
     } else if (t.classList.contains("value")) {
-      if (t.readOnly) return; // masked; nothing was typed
+      // A masked field always holds the real value while focused, and input
+      // only fires on the focused field, so t.value is never the dots.
       c.h.value = t.value;
     } else if (t.classList.contains("row-label")) {
       c.h.label = t.value;
