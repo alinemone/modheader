@@ -1,0 +1,6 @@
+* text=auto eol=lf
+
+# cmd.exe needs CRLF — an LF .bat breaks on multi-line continuations
+*.bat text eol=crlf
+
+*.png binary
