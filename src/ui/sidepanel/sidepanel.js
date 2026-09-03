@@ -4,29 +4,8 @@ window.OpenModHeaderSurface = {
 
 document.documentElement.dataset.surface = "sidePanel";
 
-function setEditingRow(row) {
-  document.querySelectorAll(".header-row.editing").forEach((activeRow) => {
-    if (activeRow !== row) activeRow.classList.remove("editing");
-  });
-  if (row) row.classList.add("editing");
-}
-
-document.addEventListener("focusin", (event) => {
-  const row = event.target.closest && event.target.closest(".header-row");
-  if (row) setEditingRow(row);
-});
-
-document.addEventListener("focusout", (event) => {
-  const row = event.target.closest && event.target.closest(".header-row");
-  if (!row) return;
-
-  setTimeout(() => {
-    if (!row.contains(document.activeElement)) {
-      row.classList.remove("editing");
-    }
-  }, 0);
-});
-
+/* The rail runs horizontally down here, so it needs wheel and drag scrolling
+   that the vertical popup rail does not. */
 const railProfiles = document.getElementById("railProfiles");
 if (railProfiles) {
   let profileDrag = null;

@@ -4,18 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenModHeader</title>
+    <link rel="stylesheet" href="../shared/ui.css" />
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <div class="app">
       <aside class="rail">
-        <button class="rail-btn menu" id="railMenu" title="All profiles">☰</button>
+        <button class="rail-btn menu" id="railMenu" title="All profiles" data-i="menu"></button>
         <div class="rail-profiles" id="railProfiles"></div>
         <div class="rail-spacer"></div>
-        <button class="rail-btn" id="railAddProfile" title="New profile">＋</button>
-        <button class="rail-btn" id="railPause" title="Pause all">⏸</button>
-        <button class="rail-btn" id="railSettings" title="Appearance">⚙</button>
-        <button class="rail-btn" id="railHelp" title="About">?</button>
+        <button class="rail-btn" id="railAddProfile" title="New profile" data-i="plus"></button>
+        <button class="rail-btn" id="railPause" title="Pause all" data-i="pause"></button>
+        <button class="rail-btn" id="railSettings" title="Appearance" data-i="gear"></button>
+        <button class="rail-btn" id="railHelp" title="About" data-i="help"></button>
       </aside>
 
       <div class="backdrop" id="backdrop" hidden></div>
@@ -35,72 +36,71 @@
             placeholder="Profile name"
           />
           <div class="spacer"></div>
-          <button class="tb-btn" id="tbAdd" title="New profile">＋</button>
-          <button class="tb-btn" id="tbPause" title="Pause all">⏸</button>
-          <button class="tb-btn" id="tbDelete" title="Delete profile">🗑</button>
+          <button class="tb-btn" id="tbAdd" title="New profile" data-i="plus"></button>
+          <button class="tb-btn" id="tbPause" title="Pause all" data-i="pause"></button>
+          <button class="tb-btn" id="tbMore" title="More actions" aria-haspopup="true" data-i="more"></button>
         </header>
 
-        <div class="content">
-          <section class="hgroup">
-            <div class="hgroup-head">
-              <label class="grouptoggle">
-                <input type="checkbox" id="requestEnabled" />
+        <div class="banner">
+          <span data-i="pause"></span>
+          <span>All modifications are paused.</span>
+          <span class="spacer"></span>
+          <button id="bannerResume" type="button">Resume</button>
+        </div>
+
+        <div class="listarea">
+          <div class="pinbar" id="pinbar"></div>
+          <div class="content">
+            <section class="sec" data-sec="request">
+              <div class="sechead">
+                <input type="checkbox" id="requestEnabled" title="Toggle every request header" />
                 <span class="gtitle">Request headers</span>
-              </label>
-            </div>
-            <div id="requestRows" class="rows"></div>
-            <button class="add-row" data-target="request">＋ Add header</button>
-          </section>
+                <span class="gcount" id="requestCount"></span>
+                <span class="sp"></span>
+                <button class="sec-add" data-target="request" title="Add request header" data-i="plus"></button>
+                <button class="chev" title="Collapse section" data-i="chev"></button>
+              </div>
+              <div id="requestRows" class="rows"></div>
+            </section>
 
-          <section class="hgroup">
-            <div class="hgroup-head">
-              <label class="grouptoggle">
-                <input type="checkbox" id="responseEnabled" />
+            <section class="sec" data-sec="response">
+              <div class="sechead">
+                <input type="checkbox" id="responseEnabled" title="Toggle every response header" />
                 <span class="gtitle">Response headers</span>
-              </label>
-            </div>
-            <div id="responseRows" class="rows"></div>
-            <button class="add-row" data-target="response">＋ Add header</button>
-          </section>
-
-          <section class="hgroup" id="filterSection" hidden>
-            <div class="hgroup-head">
-              <span class="gtitle">Filters</span>
-              <div class="filter-status" id="filterStatus" title="Current tab match status">
-                <span class="status-dot"></span>
-                <span id="filterStatusText">Checking</span>
+                <span class="gcount" id="responseCount"></span>
+                <span class="sp"></span>
+                <button class="sec-add" data-target="response" title="Add response header" data-i="plus"></button>
+                <button class="chev" title="Collapse section" data-i="chev"></button>
               </div>
-              <button class="mini-add" data-target="filter" title="Add filter">＋</button>
-            </div>
-            <div id="filterRows" class="rows"></div>
-          </section>
+              <div id="responseRows" class="rows"></div>
+            </section>
 
-          <p class="apply-note" id="applyNote">
-            Your modifications are being applied to all requests. Add a filter
-            to limit the modification to certain URLs.
-          </p>
-
-          <div class="cta">
-            <button class="btn-blue" id="modBtn">
-              <span class="ico">＋</span> MOD
-            </button>
-            <div class="filter-split">
-              <button
-                class="btn-blue filter-menu-btn"
-                id="filterMenuBtn"
-                title="Filter options"
-                aria-haspopup="true"
-                aria-expanded="false"
-              >
-                ▼
-              </button>
-              <button class="btn-blue filter-main-btn" id="filterBtn">
-                FILTER
-              </button>
-              <div class="filter-menu" id="filterMenu" hidden>
-                <div class="filter-menu-options" id="filterMenuOptions"></div>
+            <section class="sec" data-sec="filter">
+              <div class="sechead">
+                <input type="checkbox" id="filterEnabled" title="Toggle every filter" />
+                <span class="gtitle">Filters</span>
+                <div class="filter-status" id="filterStatus" title="Current tab match status">
+                  <span class="status-dot"></span>
+                  <span id="filterStatusText">Checking</span>
+                </div>
+                <span class="sp"></span>
+                <button
+                  class="sec-add"
+                  id="filterAdd"
+                  data-target="filter"
+                  title="Add filter"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  data-i="plus"
+                ></button>
+                <button class="chev" title="Collapse section" data-i="chev"></button>
               </div>
-            </div>
+              <div id="filterRows" class="rows"></div>
+              <p class="apply-note" id="applyNote">
+                Your modifications are being applied to all requests. Add a
+                filter to limit the modification to certain URLs.
+              </p>
+            </section>
           </div>
         </div>
 
@@ -113,10 +113,14 @@
             target="_blank"
             rel="noopener"
             title="View source on GitHub"
-            >🔒 Open source · GitHub</a
+            >Open source · GitHub</a
           >
         </footer>
       </div>
+    </div>
+
+    <div class="filter-menu" id="filterMenu" hidden>
+      <div class="filter-menu-options" id="filterMenuOptions"></div>
     </div>
 
     <div class="settings-menu" id="settingsMenu" hidden>
@@ -129,6 +133,28 @@
         <select id="themeMode">
           <option value="light">Light</option>
           <option value="dark">Dark</option>
+        </select>
+      </div>
+      <div class="da-row" id="densityRow">
+        <span>Row density</span>
+        <select id="rowDensity">
+          <option value="comfortable">Comfortable</option>
+          <option value="compact">Compact</option>
+        </select>
+      </div>
+      <p class="da-help" id="densityHelp">
+        Comfortable · name and value on separate lines — Compact · both on one
+        line, most rows per screen.
+      </p>
+      <div class="da-row">
+        <span>Mask secret values</span>
+        <input type="checkbox" id="maskSecrets" />
+      </div>
+      <div class="da-row">
+        <span>Pinned section heads</span>
+        <select id="pinMode">
+          <option value="push">One at a time</option>
+          <option value="stack">Stack</option>
         </select>
       </div>
       <div class="da-row">
@@ -221,6 +247,7 @@
               <li>A disabled filter is ignored.</li>
               <li>With no filters, modifications apply to all URLs.</li>
               <li>Only the currently active profile is applied.</li>
+              <li>Two enabled headers with the same name are flagged: the lower one is sent.</li>
               <li>Pause disables all modifications.</li>
             </ul>
           </section>

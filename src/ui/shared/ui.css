@@ -1,0 +1,1597 @@
+/* ==========================================================================
+   OpenModHeader — shared UI
+   Both surfaces (popup + side panel) render identical markup and share every
+   rule below. popup.css and sidepanel.css add only what genuinely differs:
+   viewport sizing and where the profile rail lives.
+   ========================================================================== */
+
+:root {
+  --profile-color: #6d071a;
+  --maroon: var(--profile-color);
+  --blue: #2563eb;
+  --blue-dark: #1d4ed8;
+  --teal: #0f766e;
+  --red: #d32f2f;
+  --amber: #b45309;
+  --amber-bg: #fef6e7;
+  --amber-line: #f0c168;
+  --green: #12805c;
+  --text: #1f2328;
+  --muted: #5f6368;
+  --faint: #8b9199;
+  --val-text: #6c757e;
+  --icon: #737b85;
+  --line: #e2e4e8;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #eceef1;
+  --surface-strong: #fafafa;
+  --hover: #f2f4f7;
+  --input-bg: transparent;
+  --danger-bg: #fde8e8;
+  --titlebar-bg: var(--profile-color);
+  --titlebar-text: #ffffff;
+  --rail-bg: #fafafa;
+  --scroll-thumb: #c6ccd4;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --overlay: rgba(20, 24, 32, 0.5);
+  --code-bg: #f4f6f8;
+  --code-text: #9b1c31;
+  --example-text: #344054;
+  --warning-text: #8a5a00;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+html[data-theme="dark"] {
+  /* --profile-color is deliberately NOT overridden: it is the profile's
+     identity and must survive a theme switch. Only neutrals change. */
+  --blue: #3b82f6;
+  --blue-dark: #2563eb;
+  --teal: #8ab4f8;
+  --red: #ff6b6b;
+  --amber: #fbbf24;
+  --amber-bg: rgba(251, 191, 36, 0.1);
+  --amber-line: #a16207;
+  --green: #34d399;
+  --text: #f4f7fb;
+  --muted: #a7b0bf;
+  --faint: #7d8593;
+  --val-text: #8f98a6;
+  --icon: #9aa3af;
+  --line: #2e3238;
+  --bg: #17191c;
+  --surface: #1a1c20;
+  --surface-2: #232629;
+  --surface-3: #2c3034;
+  --surface-strong: #131518;
+  --hover: #2a2e33;
+  --input-bg: transparent;
+  --danger-bg: rgba(255, 107, 107, 0.12);
+  --rail-bg: #121417;
+  --scroll-thumb: #454b53;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.48);
+  --overlay: rgba(0, 0, 0, 0.62);
+  --code-bg: #101827;
+  --code-text: #8ab4f8;
+  --example-text: #d7deea;
+  --warning-text: #f0c36d;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: var(--ui-font, system-ui, "Segoe UI", Tahoma, Arial, sans-serif);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.app {
+  display: flex;
+
+  /* Row metrics derive from the font-size setting, so a larger font produces
+     proportionally taller rows instead of clipped text. */
+  --rf: var(--row-font-size, 13px);
+  --l1-h: calc(var(--rf) + 3px);
+  --l2-h: calc(var(--rf) + 5px);
+  --head-h: calc(var(--rf) + 19px);
+  --row-pad: 2px;
+
+  /* Horizontal rhythm. --row-lead is where the enable checkbox sits, and the
+     section head and filter rows indent to the same number so the three kinds
+     of row share one left edge instead of drifting apart. */
+  --row-x: 4px;
+  --row-gap: 5px;
+  --grip-w: 11px;
+  --row-lead: calc(var(--row-x) + var(--grip-w) + var(--row-gap));
+}
+
+/* ── PROFILE RAIL ────────────────────────────────────────────────────────── */
+.rail {
+  width: 44px;
+  flex: 0 0 44px;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.rail-btn {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 7px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.rail-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rail-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rail-profiles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow: visible;
+}
+
+/* Colour is the profile's identity; the dot beside it is status. */
+.rail-pcircle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--maroon);
+  background: transparent;
+  color: var(--maroon);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rail-pcircle:hover {
+  background: var(--hover);
+}
+
+.rail-pcircle.current {
+  color: #fff;
+}
+
+.rail-pcircle .check {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid var(--rail-bg);
+  font-size: 0;
+}
+
+body.paused .rail-pcircle .check {
+  background: #9aa2ad;
+}
+
+.rail-spacer {
+  flex: 1;
+}
+
+/* ── PROFILE DRAWER ──────────────────────────────────────────────────────── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  z-index: 20;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 44px;
+  bottom: 0;
+  width: 220px;
+  z-index: 21;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-head {
+  padding: 12px 14px;
+  font-weight: 700;
+  color: var(--maroon);
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.drawer-add {
+  margin: 8px;
+  padding: 9px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--blue);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.drawer-add:hover {
+  background: var(--hover);
+}
+
+.pitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.pitem:hover {
+  background: var(--hover);
+}
+
+.pitem.active {
+  background: var(--surface-2);
+}
+
+.pitem.dragging {
+  opacity: 0.4;
+}
+
+.pbadge {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--maroon);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pcheck {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid var(--surface);
+  font-size: 0;
+}
+
+.pname {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pitem.active .pname {
+  font-weight: 700;
+}
+
+.pdel {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--icon);
+  cursor: pointer;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+}
+
+.pdel svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pdel:hover {
+  background: var(--danger-bg);
+  color: var(--red);
+}
+
+/* ── TITLE BAR ───────────────────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.titlebar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--titlebar-bg);
+  color: var(--titlebar-text);
+  padding: 8px 8px 8px 12px;
+}
+
+.profile-id {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.profile-id:hover {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.profile-name {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: default;
+  padding: 3px 4px;
+  margin: 0;
+  border-radius: 5px;
+  field-sizing: content;
+  min-width: 20px;
+  max-width: 220px;
+  text-overflow: ellipsis;
+}
+
+.profile-name::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
+}
+
+.profile-name:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.profile-name:focus {
+  cursor: text;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.tb-btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.tb-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.tb-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── PAUSED BANNER ───────────────────────────────────────────────────────── */
+.banner {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  background: var(--amber-bg);
+  border-bottom: 1px solid var(--amber-line);
+  color: var(--amber);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+body.paused .banner {
+  display: flex;
+}
+
+.banner svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.banner .spacer {
+  flex: 1;
+}
+
+.banner button {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.banner button:hover {
+  background: rgba(180, 83, 9, 0.12);
+}
+
+/* ── LIST AREA ────────────────────────────────────────────────────────────
+   .pinbar lives OUTSIDE .content. A pinned section head is physically moved
+   into it, so the scrollport — and its thumb — begin beneath the bar. Rows
+   can never travel under a pinned head; they stop at its edge.
+   ────────────────────────────────────────────────────────────────────────── */
+.listarea {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.pinbar {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 4;
+  background: var(--surface);
+}
+
+.pinbar:empty {
+  display: none;
+}
+
+/* No drop shadow: the scrollport starts below the bar, so nothing ever passes
+   under it and there is no depth to signal. The hairline is separation enough. */
+
+.pinbar .sechead {
+  border-top: 0;
+}
+
+/* A native scrollbar reserves a ~10px gutter that would cut every full-width
+   rule short of the right wall, so it is replaced by an overlay thumb. */
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0 14px;
+  scrollbar-width: none;
+}
+
+.content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.vthumb {
+  position: absolute;
+  right: 3px;
+  width: 5px;
+  border-radius: 3px;
+  background: var(--scroll-thumb);
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+
+.app:hover .vthumb {
+  opacity: 1;
+}
+
+/* ── SECTION HEAD ─────────────────────────────────────────────────────────
+   In the list it is an ordinary bold row — same surface, no fill. Inside the
+   pinbar the bar itself supplies the hairline and the shadow.
+   ────────────────────────────────────────────────────────────────────────── */
+.sechead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--head-h);
+  padding: 0 6px 0 var(--row-lead);
+  /* always present, pinned or not, so a short list still shows the rule */
+  border-bottom: 1px solid var(--line);
+  /* matches the rail a flagged row draws, so the checkboxes line up exactly */
+  border-left: 2px solid transparent;
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sec:not(:first-of-type) .sechead {
+  border-top: 1px solid var(--line);
+}
+
+.sechead input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+/* rows use 600 on their identity line — 700 here is the only cue needed */
+.gtitle {
+  font-weight: 700;
+  font-size: calc(var(--rf) - 0.5px);
+  white-space: nowrap;
+}
+
+.gcount {
+  font-size: calc(var(--rf) - 2.5px);
+  color: var(--muted);
+  background: var(--surface-3);
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sechead .sp {
+  flex: 1;
+}
+
+/* reads as a button, not a glyph */
+.sec-add {
+  flex: 0 0 auto;
+  width: 25px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+  color: var(--blue);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.sec-add:hover {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.sec-add svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.chev {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--icon);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s ease;
+}
+
+.chev:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.chev svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sec.collapsed .chev {
+  transform: rotate(-90deg);
+}
+
+.sec.collapsed .rows,
+.sec.collapsed .apply-note {
+  display: none;
+}
+
+/* breathing room between a section head — pinned or not — and its first row */
+/* Both columns are measured from the section's own content by sizeColumns();
+   these are only the fallbacks used before the first measurement. */
+.rows {
+  padding: 6px 0 6px;
+  --name-col: 150px;
+  --label-col: 96px;
+  --l1-col: 256px;
+}
+
+/* nothing in this section is labelled, so the value closes up against the key */
+.rows.no-labels .labelslot {
+  display: none;
+}
+
+/* status pill on the Filters head */
+.filter-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: calc(var(--rf) - 2.5px);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9aa0a6;
+}
+
+.filter-status.active .status-dot {
+  background: var(--green);
+}
+
+.filter-status.inactive .status-dot {
+  background: var(--red);
+}
+
+/* ── ROW ──────────────────────────────────────────────────────────────────
+   Square, full-bleed bands. A rounded pill floating inside a padded column
+   reads as a card; a flat band that meets both walls reads as a list row —
+   and it lines up with the section head.
+   ────────────────────────────────────────────────────────────────────────── */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--row-gap);
+  padding: var(--row-pad) 6px var(--row-pad) var(--row-x);
+  border-left: 2px solid transparent;
+  position: relative;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row + .row {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+
+.row.disabled .rmain {
+  opacity: 0.45;
+}
+
+.header-row.dragging {
+  opacity: 0.42;
+}
+
+.header-row.drop-before::before,
+.header-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 2;
+  background: var(--blue);
+  pointer-events: none;
+}
+
+.header-row.drop-before::before {
+  top: -1px;
+}
+
+.header-row.drop-after::after {
+  bottom: -1px;
+}
+
+.drag-handle {
+  flex: 0 0 auto;
+  width: var(--grip-w);
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  opacity: 0.45;
+  cursor: grab;
+  display: grid;
+  place-items: center;
+}
+
+.row:hover .drag-handle {
+  opacity: 0.9;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle:focus-visible {
+  outline: 1px solid var(--blue);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.drag-handle svg {
+  width: 9px;
+  height: 15px;
+  fill: var(--icon);
+}
+
+.row > input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+/* gap keeps the label tag off the header name */
+.rmain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Every row has the same two lines whether or not it carries a label:
+     line 1 — the header name in a fixed column, then the label as a tag
+     line 2 — the value, full width, directly under the name
+   The label is optional, but the layout never changes shape because of it, so
+   the columns line up all the way down the list. */
+.l1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: var(--l1-h);
+}
+
+/* The pill hugs its text — it must read as a tag, not an input box. It is
+   deliberately the quieter line: the label only tells rows apart, while the
+   header name is what the row actually does. */
+/* The slot is the column; the pill inside it hugs its own text so a label
+   still reads as a tag rather than a form field. */
+.labelslot {
+  flex: 0 1 var(--label-col);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.labelchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 210px;
+  height: var(--l1-h);
+  padding: 0 5px 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--blue) 7%, transparent);
+}
+
+.row:hover .labelchip,
+.labelchip:focus-within {
+  background: color-mix(in srgb, var(--blue) 15%, transparent);
+}
+
+.labelchip > svg {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  opacity: 0.6;
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.row-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  field-sizing: content; /* Chrome 123+ — the pill grows with the text */
+  width: auto;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0;
+  font-family: inherit;
+  font-weight: 500;
+  font-size: calc(var(--rf) - 2px);
+  line-height: var(--l1-h);
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+
+@supports not (field-sizing: content) {
+  .row-label {
+    width: 100%;
+  }
+}
+
+.row-label::placeholder {
+  font-weight: 400;
+  color: var(--faint);
+}
+
+/* the header name — the row's actual job, and the anchor every row shares */
+.row .name {
+  flex: 0 0 var(--name-col);
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: calc(var(--rf) - 1px);
+  line-height: var(--l1-h);
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+
+.row .name:focus {
+  box-shadow: inset 0 -1.5px 0 var(--blue);
+}
+
+/* line 2 — the value, full width under the name */
+.l2 {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--l2-h);
+}
+
+.row .value {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: calc(var(--rf) - 2px);
+  line-height: var(--l2-h);
+  color: var(--val-text);
+  direction: ltr;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.row .value:focus {
+  box-shadow: inset 0 -1.5px 0 var(--blue);
+  color: var(--text);
+}
+
+/* Row actions — visible at rest, solid on hover. The slot is a fixed three
+   buttons wide even when a row only needs one, so the value column ends at
+   the same x on every row. */
+.ract {
+  flex: 0 0 78px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.ract button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--icon);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  opacity: 0.6;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.row:hover .ract button,
+.row:focus-within .ract button {
+  opacity: 1;
+}
+
+.ract button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.ract .del:hover {
+  color: var(--red);
+  background: var(--danger-bg);
+}
+
+.ract .eye.on {
+  opacity: 1;
+  color: var(--blue);
+}
+
+/* an inapplicable action keeps its box so ✕ stays on one vertical line */
+.ract .ghost {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ract svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── DUPLICATE HEADERS ────────────────────────────────────────────────────
+   Every enabled header goes into one modifyHeaders action in list order, so
+   for two `set` operations on the same name the later one wins.
+
+   The flag is the amber row and nothing else — no badge, no struck-through
+   value — so the row keeps exactly the same shape as every other row in every
+   density. Which duplicate actually wins is in the row's tooltip.
+   ────────────────────────────────────────────────────────────────────────── */
+.row.conflict {
+  border-left-color: var(--amber-line);
+  background: color-mix(in srgb, var(--amber-bg) 55%, transparent);
+}
+
+.row.conflict:hover {
+  background: var(--amber-bg);
+}
+
+/* ── FILTER ROWS ─────────────────────────────────────────────────────────── */
+/* no drag handle here, so indent to --row-lead to land on the same left edge */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--row-gap);
+  padding: 4px 6px 4px var(--row-lead);
+  position: relative;
+}
+
+.filter-row:hover {
+  background: var(--hover);
+}
+
+.filter-row + .filter-row {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+
+.filter-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.filter-row .value {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+  font-family: var(--mono);
+  font-size: calc(var(--rf) - 1px);
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.filter-row.disabled .value {
+  opacity: 0.45;
+}
+
+.filter-row .del {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--icon);
+  cursor: pointer;
+  opacity: 0.6;
+  display: grid;
+  place-items: center;
+}
+
+.filter-row:hover .del {
+  opacity: 1;
+}
+
+.filter-row .del:hover {
+  color: var(--red);
+  background: var(--danger-bg);
+}
+
+.filter-row .del svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+.apply-note {
+  color: var(--muted);
+  font-size: calc(var(--rf) - 2px);
+  line-height: 1.55;
+  margin: 6px 12px 2px;
+}
+
+.empty-note {
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  color: var(--faint);
+  font-size: calc(var(--rf) - 2px);
+}
+
+/* ── DENSITY ──────────────────────────────────────────────────────────────
+   comfortable — name + tag on line 1, value on line 2
+   compact     — the same three parts, folded onto one line
+   Both keep one shape for every row; only the folding differs.
+   ────────────────────────────────────────────────────────────────────────── */
+html[data-density="compact"] .rmain {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+html[data-density="compact"] .l1,
+html[data-density="compact"] .l2 {
+  height: calc(var(--rf) + 7px);
+}
+
+/* Proportional, not a fixed pixel width: every row in a surface shares the
+   same basis so the columns still line up, but the value keeps its share in a
+   narrow side panel instead of being squeezed out of existence. */
+html[data-density="compact"] .l1 {
+  flex: 0 1 var(--l1-col);
+  min-width: 0;
+}
+
+/* The value keeps a floor and the key/label columns give way instead, so a
+   narrow side panel truncates a label rather than erasing the value. */
+html[data-density="compact"] .l2 {
+  flex: 1 1 auto;
+  min-width: 92px;
+}
+
+/* ── FOOTER ──────────────────────────────────────────────────────────────── */
+.footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.privacy {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.privacy:hover {
+  color: var(--blue);
+}
+
+/* ── POPOVERS ────────────────────────────────────────────────────────────── */
+.color-menu {
+  position: fixed;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.color-menu .swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.color-menu .swatch:hover {
+  transform: scale(1.12);
+}
+
+.color-menu .swatch.sel {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--surface) inset;
+}
+
+/* the ⋯ overflow menu that replaced the bin in the title bar */
+.popmenu {
+  position: fixed;
+  z-index: 40;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.popmenu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.popmenu button:hover {
+  background: var(--hover);
+}
+
+.popmenu button.danger {
+  color: var(--red);
+}
+
+.popmenu button.danger:hover {
+  background: var(--danger-bg);
+}
+
+.popmenu button svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.popmenu .sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
+}
+
+.popmenu .stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+}
+
+.popmenu .stack small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ── UNDO TOAST ──────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 28px);
+  padding: 9px 10px 9px 14px;
+  border-radius: 9px;
+  background: #23272e;
+  color: #f2f5f9;
+  font-size: 12.5px;
+  box-shadow: var(--shadow);
+}
+
+.toast span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast button {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.toast button:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+/* ── SETTINGS ────────────────────────────────────────────────────────────── */
+.settings-menu {
+  position: fixed;
+  z-index: 30;
+  width: 232px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-head {
+  display: none;
+}
+
+.da-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.da-row > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.da-row select {
+  flex: 0 0 128px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.da-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.da-help {
+  margin: -4px 0 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.export-row {
+  padding-top: 2px;
+}
+
+.settings-io {
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.settings-io button {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-io button:hover {
+  background: var(--surface-3);
+}
+
+/* ── FILTER SUGGESTION MENU ──────────────────────────────────────────────── */
+.filter-menu {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 80;
+  min-width: 210px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.filter-menu button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.filter-menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.filter-menu button:disabled {
+  cursor: default;
+}
+
+.filter-option-value {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: ltr;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.filter-option-note {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.filter-menu .sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
+}
+
+/* ── HELP OVERLAY ────────────────────────────────────────────────────────── */
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+}
+
+.help-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 532px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.help-head h2 {
+  margin: 0 0 4px;
+  color: var(--maroon);
+  font-size: 18px;
+}
+
+.help-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.help-head button {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.help-head button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.help-content {
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+}
+
+.help-card {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.help-card h3,
+.help-rules h3 {
+  margin: 0 0 7px;
+  font-size: 14px;
+}
+
+.help-card p {
+  margin: 5px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.help-card > code {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 7px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  direction: ltr;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.help-card .help-example {
+  color: var(--example-text);
+}
+
+.help-card .help-warning {
+  color: var(--warning-text);
+}
+
+.help-rules {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.help-rules ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--example-text);
+  line-height: 1.6;
+}
+
+.help-privacy {
+  margin: 12px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.help-privacy a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.help-privacy a:hover {
+  text-decoration: underline;
+}

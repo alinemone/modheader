@@ -45,7 +45,62 @@ const DEFAULT_SETTINGS = {
   font: "default",
   fontSize: 13,
   viewMode: "popup",
+  density: "comfortable",
+  pinMode: "push",
+  maskSecrets: true,
 };
+
+/* ── icons ────────────────────────────────────────────────────────────────
+   One stroked set for the whole UI. Emoji render differently per platform
+   and cannot inherit stroke weight, so nothing here uses them.
+   ────────────────────────────────────────────────────────────────────────── */
+const ICON = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  play: '<path d="M7 4.8 19 12 7 19.2Z"/>',
+  more:
+    '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
+    '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
+    '<circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  // sliders rather than a cog: at 17px a cog turns into a blob, and this menu
+  // is about appearance anyway
+  gear:
+    '<path d="M5 20.5v-6.2M5 9.7V3.5M12 20.5v-8.6M12 7.3V3.5M19 20.5v-4.2M19 11.7V3.5"/>' +
+    '<path d="M2.6 14.3h4.8M9.6 7.3h4.8M16.6 16.3h4.8"/>',
+  help:
+    '<circle cx="12" cy="12" r="9"/>' +
+    '<path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/>' +
+    '<circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>',
+  chev: '<path d="M6 9.5 12 15.5 18 9.5"/>',
+  x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  trash:
+    '<path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/>' +
+    '<path d="M6.4 7l.8 11.4A1.7 1.7 0 0 0 8.9 20h6.2a1.7 1.7 0 0 0 1.7-1.6L17.6 7"/>',
+  eye:
+    '<path d="M2.2 12S6 5.2 12 5.2 21.8 12 21.8 12 18 18.8 12 18.8 2.2 12 2.2 12Z"/>' +
+    '<circle cx="12" cy="12" r="3"/>',
+  eyeoff:
+    '<path d="M4 4l16 16M10 5.6A9.6 9.6 0 0 1 12 5.4c6 0 9.8 6.6 9.8 6.6a18 18 0 0 1-3.3 4M6.6 7.9A17.6 17.6 0 0 0 2.2 12S6 18.6 12 18.6c1.2 0 2.3-.2 3.3-.6"/>',
+  tag:
+    '<path d="M3.9 5.9v5c0 .7.3 1.3.7 1.8l6.8 6.8c.7.7 1.8.7 2.5 0l5.6-5.6c.7-.7.7-1.8 0-2.5l-6.8-6.8a2.5 2.5 0 0 0-1.8-.7h-5a2 2 0 0 0-2 2Z"/>' +
+    '<circle cx="8" cy="8" r="1.1"/>',
+  grip:
+    '<circle cx="2.5" cy="2" r="1.25"/><circle cx="6.5" cy="2" r="1.25"/>' +
+    '<circle cx="2.5" cy="7.5" r="1.25"/><circle cx="6.5" cy="7.5" r="1.25"/>' +
+    '<circle cx="2.5" cy="13" r="1.25"/><circle cx="6.5" cy="13" r="1.25"/>',
+};
+
+function svgIcon(name) {
+  const box = name === "grip" ? "0 0 9 15" : "0 0 24 24";
+  return `<svg viewBox="${box}" aria-hidden="true">${ICON[name] || ""}</svg>`;
+}
+
+function paintIcons(root = document) {
+  root.querySelectorAll("[data-i]").forEach((el) => {
+    el.innerHTML = svgIcon(el.dataset.i);
+  });
+}
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -67,6 +122,8 @@ function newHeader() {
 }
 
 const labelEditing = new Set();
+const revealed = new Set();
+const collapsed = new Set();
 
 function newFilter(value = "") {
   return { id: uid(), enabled: true, value };
@@ -114,6 +171,17 @@ function normalize(raw) {
   if (!["popup", "sidePanel"].includes(s.settings.viewMode)) {
     s.settings.viewMode = "popup";
   }
+  // "adaptive" used to fold unlabelled rows onto one line, which made the
+  // list ragged; it was removed in favour of one shape for every row.
+  if (!["comfortable", "compact"].includes(s.settings.density)) {
+    s.settings.density = DEFAULT_SETTINGS.density;
+  }
+  if (!["push", "stack"].includes(s.settings.pinMode)) {
+    s.settings.pinMode = DEFAULT_SETTINGS.pinMode;
+  }
+  if (typeof s.settings.maskSecrets !== "boolean") {
+    s.settings.maskSecrets = DEFAULT_SETTINGS.maskSecrets;
+  }
   return s;
 }
 
@@ -139,8 +207,18 @@ async function reconcile(hadCache) {
 
 function applySettings() {
   const st = state.settings || DEFAULT_SETTINGS;
-  const root = document.documentElement.style;
-  document.documentElement.dataset.theme = st.theme || "light";
+  const el = document.documentElement;
+  const root = el.style;
+  el.dataset.theme = st.theme || "light";
+  // The side panel is too narrow for the folded row — the key and label
+  // columns would leave the value a sliver — so it stays two-line whatever the
+  // popup's setting says, and the setting itself is hidden there.
+  el.dataset.density =
+    el.dataset.surface === "sidePanel"
+      ? "comfortable"
+      : st.density || "comfortable";
+  el.dataset.pin = st.pinMode || "push";
+  el.dataset.mask = st.maskSecrets ? "on" : "off";
   root.setProperty("--ui-font", UI_FONTS[st.font] || UI_FONTS.default);
   root.setProperty("--row-font-size", (st.fontSize || 13) + "px");
 }
@@ -205,6 +283,97 @@ function openColorMenu(anchor) {
   setTimeout(() => document.addEventListener("click", onColorDocClick, true), 0);
 }
 
+/* ── the ⋯ overflow menu ───────────────────────────────────────────────────
+   Delete used to sit next to Pause in the title bar; one slip destroyed a
+   whole profile. It lives behind ⋯ now, and deletions are undoable.
+   ────────────────────────────────────────────────────────────────────────── */
+let popMenu = null;
+
+function closePopMenu() {
+  if (!popMenu) return;
+  popMenu.remove();
+  popMenu = null;
+  document.removeEventListener("click", onPopMenuDocClick, true);
+}
+
+function onPopMenuDocClick(e) {
+  if (popMenu && !popMenu.contains(e.target) && e.target.id !== "tbMore") {
+    closePopMenu();
+  }
+}
+
+function openProfileMenu(anchor) {
+  const wasOpen = !!popMenu;
+  closePopMenu();
+  if (wasOpen) return;
+
+  const menu = document.createElement("div");
+  menu.className = "popmenu";
+
+  const dup = document.createElement("button");
+  dup.type = "button";
+  dup.innerHTML = svgIcon("plus") + "<span>Duplicate profile</span>";
+  dup.addEventListener("click", () => {
+    closePopMenu();
+    duplicateProfile();
+  });
+
+  const sep = document.createElement("div");
+  sep.className = "sep";
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "danger";
+  del.innerHTML = svgIcon("trash") + "<span>Delete profile</span>";
+  del.addEventListener("click", () => {
+    closePopMenu();
+    deleteProfile(activeProfile().id);
+  });
+
+  menu.append(dup, sep, del);
+  document.body.appendChild(menu);
+
+  const r = anchor.getBoundingClientRect();
+  const w = menu.offsetWidth;
+  menu.style.top = r.bottom + 6 + "px";
+  menu.style.left = Math.max(6, Math.min(r.right - w, window.innerWidth - w - 6)) + "px";
+
+  popMenu = menu;
+  setTimeout(() => document.addEventListener("click", onPopMenuDocClick, true), 0);
+}
+
+/* ── undo toast ──────────────────────────────────────────────────────────── */
+let toastEl = null;
+let toastTimer = null;
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  if (toastEl) toastEl.remove();
+  toastEl = null;
+}
+
+function showToast(message, onUndo) {
+  hideToast();
+  const el = document.createElement("div");
+  el.className = "toast";
+
+  const text = document.createElement("span");
+  text.textContent = message;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = "Undo";
+  btn.addEventListener("click", () => {
+    hideToast();
+    onUndo();
+  });
+
+  el.append(text, btn);
+  document.body.appendChild(el);
+  toastEl = el;
+  toastTimer = setTimeout(hideToast, 7000);
+}
+
 function closeSettings() {
   const menu = document.getElementById("settingsMenu");
   menu.hidden = true;
@@ -214,7 +383,7 @@ function closeSettings() {
 
 function onSettingsDocClick(e) {
   const menu = document.getElementById("settingsMenu");
-  if (!menu.contains(e.target) && e.target.id !== "railSettings") {
+  if (!menu.contains(e.target) && !e.target.closest("#railSettings")) {
     closeSettings();
   }
 }
@@ -237,9 +406,13 @@ function toggleSettings(anchor) {
   setTimeout(() => document.addEventListener("click", onSettingsDocClick, true), 0);
 }
 
+/* ── filter suggestion menu ────────────────────────────────────────────────
+   The ＋ on the Filters head opens this instead of dropping a blank row,
+   because the filter you want is almost always the tab you are looking at.
+   ────────────────────────────────────────────────────────────────────────── */
 function closeFilterMenu() {
   const menu = document.getElementById("filterMenu");
-  const btn = document.getElementById("filterMenuBtn");
+  const btn = document.getElementById("filterAdd");
   if (!menu || menu.hidden) return;
   menu.hidden = true;
   if (btn) btn.setAttribute("aria-expanded", "false");
@@ -247,13 +420,15 @@ function closeFilterMenu() {
 }
 
 function onFilterMenuDocClick(e) {
-  const split = document.querySelector(".filter-split");
-  if (!split || !split.contains(e.target)) closeFilterMenu();
+  const menu = document.getElementById("filterMenu");
+  if (menu && !menu.contains(e.target) && !e.target.closest("#filterAdd")) {
+    closeFilterMenu();
+  }
 }
 
 function toggleFilterMenu() {
   const menu = document.getElementById("filterMenu");
-  const btn = document.getElementById("filterMenuBtn");
+  const btn = document.getElementById("filterAdd");
   if (!menu || !btn) return;
   if (!menu.hidden) {
     closeFilterMenu();
@@ -268,7 +443,7 @@ function toggleFilterMenu() {
 
 function positionFilterMenu() {
   const menu = document.getElementById("filterMenu");
-  const btn = document.getElementById("filterMenuBtn");
+  const btn = document.getElementById("filterAdd");
   if (!menu || !btn) return;
 
   requestAnimationFrame(() => {
@@ -277,14 +452,14 @@ function positionFilterMenu() {
     const gap = 6;
     const margin = 6;
     const left = Math.min(
-      btnRect.left,
+      btnRect.right - menuRect.width,
       Math.max(margin, window.innerWidth - menuRect.width - margin)
     );
     const top = Math.min(
       btnRect.bottom + gap,
       Math.max(margin, window.innerHeight - menuRect.height - margin)
     );
-    menu.style.left = `${left}px`;
+    menu.style.left = `${Math.max(margin, left)}px`;
     menu.style.top = `${top}px`;
   });
 }
@@ -352,18 +527,9 @@ async function buildCurrentTabFilterOptions() {
   const tab = await getCurrentTabInfo();
   if (!tab) return [];
   return uniqueFilterOptions([
-    {
-      value: tab.host,
-      note: "Exact current host",
-    },
-    {
-      value: parentWildcardHost(tab.hostname),
-      note: "Wildcard for this site",
-    },
-    {
-      value: tab.origin,
-      note: "Current origin only",
-    },
+    { value: tab.host, note: "Exact current host" },
+    { value: parentWildcardHost(tab.hostname), note: "Wildcard for this site" },
+    { value: tab.origin, note: "Current origin only" },
   ]).slice(0, 3);
 }
 
@@ -372,7 +538,9 @@ async function renderFilterMenuOptions() {
   if (!container) return;
   container.innerHTML = "";
 
+  const frag = document.createDocumentFragment();
   const options = await buildCurrentTabFilterOptions();
+
   if (options.length === 0) {
     const empty = document.createElement("button");
     empty.type = "button";
@@ -380,32 +548,45 @@ async function renderFilterMenuOptions() {
     empty.innerHTML =
       '<span class="filter-option-value">No current site</span>' +
       '<span class="filter-option-note">Open an HTTP or HTTPS tab</span>';
-    container.appendChild(empty);
-    positionFilterMenu();
-    return;
+    frag.appendChild(empty);
+  } else {
+    options.forEach((option) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.title = option.value;
+
+      const value = document.createElement("span");
+      value.className = "filter-option-value";
+      value.textContent = option.value;
+
+      const note = document.createElement("span");
+      note.className = "filter-option-note";
+      note.textContent = option.note;
+
+      btn.append(value, note);
+      btn.addEventListener("click", () => {
+        closeFilterMenu();
+        addRow("filter", newFilter(option.value));
+      });
+      frag.appendChild(btn);
+    });
   }
 
-  const frag = document.createDocumentFragment();
-  options.forEach((option) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.title = option.value;
+  const sep = document.createElement("div");
+  sep.className = "sep";
+  frag.appendChild(sep);
 
-    const value = document.createElement("span");
-    value.className = "filter-option-value";
-    value.textContent = option.value;
-
-    const note = document.createElement("span");
-    note.className = "filter-option-note";
-    note.textContent = option.note;
-
-    btn.append(value, note);
-    btn.addEventListener("click", () => {
-      closeFilterMenu();
-      addRow("filter", newFilter(option.value));
-    });
-    frag.appendChild(btn);
+  const blank = document.createElement("button");
+  blank.type = "button";
+  blank.innerHTML =
+    '<span class="filter-option-value">Empty filter</span>' +
+    '<span class="filter-option-note">Type a host or URL yourself</span>';
+  blank.addEventListener("click", () => {
+    closeFilterMenu();
+    addRow("filter");
   });
+  frag.appendChild(blank);
+
   container.appendChild(frag);
   positionFilterMenu();
 }
@@ -443,7 +624,7 @@ function setFilterStatus(kind, text, title) {
 
 async function updateFilterStatus() {
   const status = document.getElementById("filterStatus");
-  if (!status || document.getElementById("filterSection").hidden) return;
+  if (!status) return;
 
   const run = ++filterStatusRun;
   setFilterStatus("", "Checking", "Checking current tab match status");
@@ -504,7 +685,7 @@ function render() {
   for (const id of ["railPause", "tbPause"]) {
     const btn = document.getElementById(id);
     if (!btn) continue;
-    btn.textContent = state.paused ? "▶" : "⏸";
+    btn.innerHTML = svgIcon(state.paused ? "play" : "pause");
     btn.title = state.paused ? "Resume all" : "Pause all";
   }
 
@@ -529,20 +710,27 @@ function render() {
 
   updateGroupToggle("requestEnabled", profile.headers);
   updateGroupToggle("responseEnabled", profile.responseHeaders);
+  updateGroupToggle("filterEnabled", profile.filters);
 
-  const hasFilterRows = profile.filters.length > 0;
-  const hasEffectiveFilters = effectiveFilters(profile).length > 0;
-  document.getElementById("filterSection").hidden = !hasFilterRows;
-  document.getElementById("applyNote").hidden = hasEffectiveFilters;
+  updateSectionCount("requestCount", profile.headers, "header");
+  updateSectionCount("responseCount", profile.responseHeaders, "header");
+
+  document.getElementById("applyNote").hidden =
+    effectiveFilters(profile).length > 0;
 
   document.getElementById("fontFamily").value = state.settings.font;
   document.getElementById("fontSize").value = String(state.settings.fontSize);
   document.getElementById("themeMode").value = state.settings.theme || "light";
   document.getElementById("surfaceMode").value = state.settings.viewMode || "popup";
+  document.getElementById("rowDensity").value = state.settings.density;
+  document.getElementById("pinMode").value = state.settings.pinMode;
+  document.getElementById("maskSecrets").checked = !!state.settings.maskSecrets;
   renderExportScope();
 
+  applyCollapsed();
   updateRuleCount();
   updateFilterStatus();
+  layoutPins();
 }
 
 let dragId = null;
@@ -614,10 +802,10 @@ function renderRailProfiles() {
     if (p.id === active.id) {
       b.style.background = p.color;
       b.style.color = "#fff";
-      const c = document.createElement("i");
-      c.className = "check";
-      c.textContent = "✔";
-      b.appendChild(c);
+      const dot = document.createElement("i");
+      dot.className = "check";
+      dot.title = state.paused ? "Paused" : "Active";
+      b.appendChild(dot);
     } else {
       b.style.color = p.color;
     }
@@ -645,10 +833,9 @@ function renderProfileList() {
     badge.textContent = i + 1;
     badge.style.background = p.color;
     if (p.id === active.id) {
-      const c = document.createElement("i");
-      c.className = "pcheck";
-      c.textContent = "✔";
-      badge.appendChild(c);
+      const dot = document.createElement("i");
+      dot.className = "pcheck";
+      badge.appendChild(dot);
     }
 
     const nm = document.createElement("span");
@@ -658,7 +845,7 @@ function renderProfileList() {
 
     const del = document.createElement("button");
     del.className = "pdel";
-    del.textContent = "🗑";
+    del.innerHTML = svgIcon("trash");
     del.title = "Delete profile";
     del.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -689,18 +876,39 @@ function renderProfileList() {
   list.scrollTop = prevScroll;
 }
 
+function duplicateProfile() {
+  const src = activeProfile();
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  copy.name = `${src.name} copy`;
+  [...copy.headers, ...copy.responseHeaders, ...copy.filters].forEach((x) => {
+    x.id = uid();
+  });
+  state.profiles.splice(activeIndex() + 1, 0, copy);
+  state.activeProfileId = copy.id;
+  render();
+  save();
+}
+
 function deleteProfile(id) {
   if (state.profiles.length === 1) {
     alert("At least one profile must remain.");
     return;
   }
-  const p = state.profiles.find((x) => x.id === id);
-  if (!confirm(`Delete profile “${p.name}”?`)) return;
-  state.profiles = state.profiles.filter((x) => x.id !== id);
-  if (state.activeProfileId === id)
-    state.activeProfileId = state.profiles[0].id;
+  const index = state.profiles.findIndex((x) => x.id === id);
+  if (index < 0) return;
+  const [removed] = state.profiles.splice(index, 1);
+  const wasActive = state.activeProfileId === id;
+  if (wasActive) state.activeProfileId = state.profiles[0].id;
   render();
   save();
+
+  showToast(`Deleted “${removed.name}”`, () => {
+    state.profiles.splice(Math.min(index, state.profiles.length), 0, removed);
+    if (wasActive) state.activeProfileId = removed.id;
+    render();
+    save();
+  });
 }
 
 function openDrawer() {
@@ -739,14 +947,98 @@ function updateGroupToggle(id, list) {
   el.checked = total > 0 && on === total;
 }
 
+function updateSectionCount(id, list, noun) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const total = list.length;
+  if (total === 0) {
+    el.textContent = `no ${noun}s`;
+    return;
+  }
+  el.textContent = `${list.filter((x) => x.enabled).length} of ${total} on`;
+}
+
+/* ── masking ──────────────────────────────────────────────────────────────
+   Long credential-shaped values are hidden by default so the panel is safe
+   to screen-share; the eye reveals one row at a time.
+   ────────────────────────────────────────────────────────────────────────── */
+const SECRET_NAME = /(authorization|token|secret|key|cookie|session|password|credential)/i;
+
+function looksSecret(h) {
+  const value = String(h.value || "");
+  if (value.length < 12) return false;
+  return SECRET_NAME.test(h.name || "") || /^bearer\s/i.test(value);
+}
+
+function maskValue(value) {
+  const raw = String(value || "");
+  const prefix = /^bearer\s/i.test(raw) ? raw.slice(0, 7) : "";
+  return prefix + "••••••••" + raw.slice(-8);
+}
+
+/* ── duplicate detection ──────────────────────────────────────────────────
+   background.js puts every enabled header into one modifyHeaders action in
+   list order, so for two `set` operations on the same name the later one is
+   what actually gets sent.
+   ────────────────────────────────────────────────────────────────────────── */
+function duplicateStatus(list) {
+  const byName = new Map();
+  list.forEach((h) => {
+    if (!h.enabled) return;
+    const key = String(h.name || "").trim().toLowerCase();
+    if (!key) return;
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(h.id);
+  });
+
+  const status = new Map();
+  byName.forEach((ids, key) => {
+    if (ids.length < 2) return;
+    ids.forEach((id, i) => {
+      status.set(id, {
+        applied: i === ids.length - 1,
+        count: ids.length,
+        name: key,
+      });
+    });
+  });
+  return status;
+}
+
 function renderHeaderRows(containerId, list, datalistId) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
+
+  if (list.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = "Nothing here yet — use ＋ to add one.";
+    container.appendChild(empty);
+    return;
+  }
+
+  const dupes = duplicateStatus(list);
+  const mask = !!state.settings.maskSecrets;
   const frag = document.createDocumentFragment();
+
   list.forEach((h) => {
+    const showLabel = !!h.label || labelEditing.has(h.id);
+    const dupe = dupes.get(h.id);
+
     const row = document.createElement("div");
-    row.className = "row header-row" + (h.enabled ? "" : " disabled");
+    row.className =
+      "row header-row" +
+      (h.enabled ? "" : " disabled") +
+      (showLabel ? " haslabel" : " nolabel") +
+      (dupe ? " conflict" : "");
     row.dataset.id = h.id;
+    // The amber row is the whole flag; the detail lives in the tooltip so the
+    // row keeps the same shape as every other one.
+    if (dupe) {
+      row.title = dupe.applied
+        ? `${dupe.count} enabled headers named “${h.name}” — this one is the one sent`
+        : `${dupe.count} enabled headers named “${h.name}” — a lower row is sent instead`;
+    }
 
     const dragHandle = document.createElement("button");
     dragHandle.type = "button";
@@ -754,65 +1046,198 @@ function renderHeaderRows(containerId, list, datalistId) {
     dragHandle.draggable = true;
     dragHandle.title = "Drag to reorder header";
     dragHandle.setAttribute("aria-label", "Drag to reorder header");
-    dragHandle.innerHTML =
-      '<svg viewBox="0 0 12 18" aria-hidden="true">' +
-      '<path d="M6 3.5v11" />' +
-      "</svg>";
+    dragHandle.innerHTML = svgIcon("grip");
 
     const chk = document.createElement("input");
     chk.type = "checkbox";
     chk.className = "en";
     chk.checked = h.enabled;
 
-    let lbl = null;
-    if (h.label || labelEditing.has(h.id)) {
-      lbl = document.createElement("input");
+    const main = document.createElement("div");
+    main.className = "rmain";
+    const l1 = document.createElement("div");
+    l1.className = "l1";
+    const l2 = document.createElement("div");
+    l2.className = "l2";
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "name";
+    name.placeholder = "Header name";
+    name.value = h.name;
+    if (datalistId) name.dataset.list = datalistId;
+
+    // Name first in a column measured from the section's longest key, then the
+    // label slot. The slot holds its width whether or not this row is
+    // labelled, so every row is the same shape; sizeColumns() removes it
+    // entirely when nothing in the section is labelled.
+    const slot = document.createElement("span");
+    slot.className = "labelslot";
+
+    if (showLabel) {
+      const chip = document.createElement("span");
+      chip.className = "labelchip" + (h.label ? " has-label" : "");
+      chip.innerHTML = svgIcon("tag");
+
+      const lbl = document.createElement("input");
       lbl.type = "text";
       lbl.className = "row-label";
       lbl.placeholder = "label";
       lbl.value = h.label || "";
       lbl.dataset.hid = h.id;
+
+      chip.appendChild(lbl);
+      slot.appendChild(chip);
     }
 
-    const name = document.createElement("input");
-    name.type = "text";
-    name.className = "name";
-    name.placeholder = "Name";
-    name.value = h.name;
-    if (datalistId) name.dataset.list = datalistId;
+    l1.append(name, slot);
+
+    const secret = looksSecret(h);
+    const hidden = secret && mask && !revealed.has(h.id);
 
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
     value.placeholder = "Value";
-    value.value = h.value;
+    value.value = hidden ? maskValue(h.value) : h.value;
+    if (hidden) value.readOnly = true;
+    l2.appendChild(value);
+
+    main.append(l1, l2);
+
+    const actions = document.createElement("div");
+    actions.className = "ract";
+
+    // Three slots, always. Reveal only applies to secrets and the tag only to
+    // unlabelled rows, but an inapplicable slot still holds its space so ✕
+    // lands on the same vertical line down the whole list.
+    const eye = document.createElement("button");
+    eye.type = "button";
+    eye.className = "eye" + (hidden ? "" : " on") + (secret && mask ? "" : " ghost");
+    eye.innerHTML = svgIcon(hidden ? "eye" : "eyeoff");
+    eye.title = hidden ? "Reveal value" : "Hide value";
+    if (!(secret && mask)) eye.tabIndex = -1;
+    actions.appendChild(eye);
 
     const tag = document.createElement("button");
-    tag.className = "tag";
-    tag.innerHTML =
-      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-      '<path d="M3.75 5.75v5.1c0 .66.26 1.3.73 1.77l6.9 6.9a1.75 1.75 0 0 0 2.47 0l5.67-5.67a1.75 1.75 0 0 0 0-2.47l-6.9-6.9a2.5 2.5 0 0 0-1.77-.73h-5.1a2 2 0 0 0-2 2Z" />' +
-      '<circle cx="8" cy="8" r="1.25" />' +
-      '<path class="tag-plus" d="M15.75 7.25v5M13.25 9.75h5" />' +
-      "</svg>";
+    tag.type = "button";
+    tag.className = "tag" + (showLabel ? " ghost" : "");
+    tag.innerHTML = svgIcon("tag");
     tag.title = "Add label";
     tag.setAttribute("aria-label", "Add label");
+    if (showLabel) tag.tabIndex = -1;
+    actions.appendChild(tag);
 
     const del = document.createElement("button");
+    del.type = "button";
     del.className = "del";
-    del.textContent = "✕";
+    del.innerHTML = svgIcon("x");
     del.title = "Remove";
+    actions.appendChild(del);
 
-    if (lbl) row.append(dragHandle, chk, name, value, lbl, tag, del);
-    else row.append(dragHandle, chk, name, value, tag, del);
+    row.append(dragHandle, chk, main, actions);
     frag.appendChild(row);
   });
+
   container.appendChild(frag);
+  sizeColumns(container);
+}
+
+/* ── COLUMN SIZING ────────────────────────────────────────────────────────
+   The name column is measured from the longest header name actually in the
+   section rather than being a fixed guess, so the labels sit just past the
+   widest key and every row lines up with it. A section with no labels at all
+   drops the label column entirely and the value moves up against the key.
+
+   Sections are sized independently: response header names are far longer than
+   request ones, and forcing both to the same column would waste half the row.
+   ────────────────────────────────────────────────────────────────────────── */
+const GAP_AFTER_NAME = 10;
+const CHIP_CHROME = 26; // tag glyph + gaps + the pill's own padding
+const MIN_VALUE_W = 92; // compact keeps at least this much for the value
+
+let measureCanvas = null;
+
+function textWidth(text, font) {
+  if (!measureCanvas) measureCanvas = document.createElement("canvas");
+  const ctx = measureCanvas.getContext("2d");
+  ctx.font = font;
+  return ctx.measureText(text || "").width;
+}
+
+function fontOf(el) {
+  const s = getComputedStyle(el);
+  return `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+}
+
+function widest(inputs, font) {
+  return inputs.reduce((max, el) => Math.max(max, textWidth(el.value, font)), 0);
+}
+
+const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), Math.max(lo, hi));
+
+function sizeColumns(container) {
+  const names = [...container.querySelectorAll(".name")];
+  if (names.length === 0) return;
+
+  const labels = [...container.querySelectorAll(".row-label")];
+  // Presence of a chip, not of text: a row whose label is being typed for the
+  // first time still has an empty value, and collapsing the column under it
+  // would hide the very input the caret is in.
+  const hasLabels = labels.length > 0;
+  container.classList.toggle("no-labels", !hasLabels);
+
+  // Measure against .rmain, not the container: the row also spends width on
+  // the grip, checkbox and action column, and .rmain is what the columns
+  // actually divide up.
+  const main = container.querySelector(".rmain");
+  const avail = (main && main.clientWidth) || container.clientWidth || 320;
+  const compact = document.documentElement.dataset.density === "compact";
+
+  const nameCol = clamp(
+    Math.ceil(widest(names, fontOf(names[0]))) + 2,
+    76,
+    Math.round(avail * (compact ? 0.38 : 0.55))
+  );
+  // In compact the value shares the line, so the label may not grow past what
+  // it leaves behind. In comfortable the value has its own line and does not
+  // compete at all.
+  const labelMax = compact
+    ? avail - nameCol - GAP_AFTER_NAME - MIN_VALUE_W
+    : Math.round(avail * 0.45);
+  const labelCol = hasLabels
+    ? clamp(Math.ceil(widest(labels, fontOf(labels[0]))) + CHIP_CHROME, 44, labelMax)
+    : 0;
+
+  // The whole key+label block needs an explicit width too. Left to shrink-wrap
+  // its content, a row with a short label would be narrower than one with a
+  // long label and the values would step in and out down the list.
+  const block = hasLabels ? nameCol + GAP_AFTER_NAME + labelCol : nameCol;
+
+  container.style.setProperty("--name-col", nameCol + "px");
+  container.style.setProperty("--label-col", labelCol + "px");
+  container.style.setProperty("--l1-col", block + "px");
+}
+
+function sizeAllColumns() {
+  ["requestRows", "responseRows"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) sizeColumns(el);
+  });
 }
 
 function renderFilterRows(containerId, list) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
+
+  if (list.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = "No filters — modifications apply to every URL.";
+    container.appendChild(empty);
+    return;
+  }
+
   const frag = document.createDocumentFragment();
   list.forEach((f) => {
     const row = document.createElement("div");
@@ -827,12 +1252,13 @@ function renderFilterRows(containerId, list) {
     const value = document.createElement("input");
     value.type = "text";
     value.className = "value";
-    value.placeholder = "*.google.*, localhost, 127.0.0.1, https://order.site.com";
+    value.placeholder = "*.example.com, localhost, 127.0.0.1";
     value.value = f.value;
 
     const del = document.createElement("button");
+    del.type = "button";
     del.className = "del";
-    del.textContent = "✕";
+    del.innerHTML = svgIcon("x");
     del.title = "Remove filter";
 
     row.append(chk, value, del);
@@ -841,10 +1267,114 @@ function renderFilterRows(containerId, list) {
   container.appendChild(frag);
 }
 
+/* ── pinned section heads ─────────────────────────────────────────────────
+   A head is MOVED into .pinbar, never cloned and never made sticky. It
+   leaves the list at the same moment the bar grows by its height, so the
+   list shortens by exactly what the scrollport loses and rows never jump.
+   ────────────────────────────────────────────────────────────────────────── */
+let PIN = null;
+
+function setupPinning() {
+  const area = document.querySelector(".listarea");
+  if (!area) return;
+  const bar = document.getElementById("pinbar");
+  const content = area.querySelector(".content");
+
+  const thumb = document.createElement("i");
+  thumb.className = "vthumb";
+  area.appendChild(thumb);
+
+  const secs = [...content.querySelectorAll(".sec")].map((sec) => {
+    const head = sec.querySelector(".sechead");
+    head._sec = sec; // survives being moved out of .sec
+    return { sec, head, pinned: false };
+  });
+
+  PIN = { area, bar, content, thumb, secs };
+
+  content.addEventListener("scroll", layoutPins, { passive: true });
+  new ResizeObserver(layoutPins).observe(content);
+}
+
+function pinHead(s) {
+  if (s.pinned) return;
+  PIN.bar.appendChild(s.head);
+  s.pinned = true;
+}
+
+function unpinHead(s) {
+  if (!s.pinned) return;
+  s.sec.prepend(s.head);
+  s.pinned = false;
+}
+
+function layoutPins() {
+  if (!PIN) return;
+  const { area, bar, content, thumb, secs } = PIN;
+  const stack = (state.settings && state.settings.pinMode) === "stack";
+
+  // Measured against the whole list area, so the answer does not depend on
+  // how much is currently pinned — pinning moves height from one to the other.
+  const scrolls = content.scrollHeight + bar.offsetHeight > area.clientHeight + 1;
+
+  if (!scrolls) {
+    secs.forEach(unpinHead);
+  } else {
+    const headH = secs[0].head.offsetHeight || 32;
+    const portTop = content.getBoundingClientRect().top;
+    const wanted = new Set([0]); // the first head stays up while the list scrolls
+
+    for (let i = 1; i < secs.length; i++) {
+      const s = secs[i];
+      // Normalised to the unpinned geometry so the threshold is identical in
+      // both directions and a head cannot flicker at the boundary.
+      const top =
+        s.sec.getBoundingClientRect().top - portTop - (s.pinned ? headH : 0);
+      if (top <= 0) wanted.add(i);
+    }
+
+    if (!stack) {
+      const last = Math.max(...wanted);
+      wanted.clear();
+      wanted.add(last);
+    }
+
+    secs.forEach((s, i) => (wanted.has(i) ? pinHead(s) : unpinHead(s)));
+    secs.forEach((s) => {
+      if (s.pinned) bar.appendChild(s.head); // keep the bar in section order
+    });
+  }
+
+  // the thumb spans the scrollport only, which now begins under the bar
+  const range = content.scrollHeight - content.clientHeight;
+  if (range < 1) {
+    thumb.style.display = "none";
+    return;
+  }
+  thumb.style.display = "";
+  const h = Math.max(
+    30,
+    content.clientHeight * (content.clientHeight / content.scrollHeight)
+  );
+  thumb.style.height = h + "px";
+  thumb.style.top =
+    content.offsetTop + (content.scrollTop / range) * (content.clientHeight - h) + "px";
+}
+
+function sectionOf(el) {
+  return el.closest(".sec") || (el.closest(".sechead") || {})._sec || null;
+}
+
+function applyCollapsed() {
+  document.querySelectorAll(".sec").forEach((sec) => {
+    sec.classList.toggle("collapsed", collapsed.has(sec.dataset.sec));
+  });
+}
+
 function updateRuleCount() {
   const el = document.getElementById("ruleCount");
   if (state.paused) {
-    el.textContent = "⏸ Paused";
+    el.textContent = "Paused";
     return;
   }
   el.textContent = `Active: ${activeProfile().name}`;
@@ -1076,14 +1606,14 @@ function setupHeaderDelegation(containerId) {
   const container = document.getElementById(containerId);
   const ctx = () =>
     containerId === "requestRows"
-      ? { list: activeProfile().headers, groupId: "requestEnabled" }
-      : { list: activeProfile().responseHeaders, groupId: "responseEnabled" };
+      ? { list: activeProfile().headers, groupId: "requestEnabled", target: "request" }
+      : { list: activeProfile().responseHeaders, groupId: "responseEnabled", target: "response" };
   const find = (e) => {
     const row = e.target.closest(".row");
     if (!row) return null;
-    const { list, groupId } = ctx();
+    const { list, groupId, target } = ctx();
     const h = list.find((x) => x.id === row.dataset.id);
-    return h ? { row, h, list, groupId } : null;
+    return h ? { row, h, list, groupId, target } : null;
   };
 
   const clearDropState = () => {
@@ -1144,8 +1674,8 @@ function setupHeaderDelegation(containerId) {
     const c = find(e);
     if (!c) return;
     c.h.enabled = e.target.checked;
-    c.row.classList.toggle("disabled", !c.h.enabled);
-    updateGroupToggle(c.groupId, c.list);
+    // enabling or disabling changes which duplicate wins, so re-render
+    render();
     commit();
   });
 
@@ -1153,24 +1683,58 @@ function setupHeaderDelegation(containerId) {
     const t = e.target;
     const c = find(e);
     if (!c) return;
-    if (t.classList.contains("name")) c.h.name = t.value;
-    else if (t.classList.contains("value")) c.h.value = t.value;
-    else if (t.classList.contains("row-label")) c.h.label = t.value;
-    else return;
+    if (t.classList.contains("name")) {
+      c.h.name = t.value;
+      updateSectionCount(
+        c.target === "request" ? "requestCount" : "responseCount",
+        c.list,
+        "header"
+      );
+      sizeColumns(container); // the widest key may have just changed
+    } else if (t.classList.contains("value")) {
+      if (t.readOnly) return; // masked; nothing was typed
+      c.h.value = t.value;
+    } else if (t.classList.contains("row-label")) {
+      c.h.label = t.value;
+      t.closest(".labelchip")?.classList.toggle("has-label", !!t.value.trim());
+      sizeColumns(container);
+    } else {
+      return;
+    }
     commit();
   });
 
   container.addEventListener("click", (e) => {
     const t = e.target;
-    if (t.classList.contains("del")) {
+
+    if (t.closest(".del")) {
       const c = find(e);
       if (!c) return;
-      const i = c.list.indexOf(c.h);
-      if (i >= 0) c.list.splice(i, 1);
+      const index = c.list.indexOf(c.h);
+      if (index < 0) return;
+      c.list.splice(index, 1);
       labelEditing.delete(c.h.id);
+      revealed.delete(c.h.id);
       render();
       commit();
-    } else if (t.closest(".tag")) {
+      showToast(`Removed ${c.h.name || "header"}`, () => {
+        c.list.splice(Math.min(index, c.list.length), 0, c.h);
+        render();
+        commit();
+      });
+      return;
+    }
+
+    if (t.closest(".eye")) {
+      const c = find(e);
+      if (!c) return;
+      if (revealed.has(c.h.id)) revealed.delete(c.h.id);
+      else revealed.add(c.h.id);
+      render();
+      return;
+    }
+
+    if (t.closest(".tag")) {
       const c = find(e);
       if (!c) return;
       labelEditing.add(c.h.id);
@@ -1228,12 +1792,10 @@ function setupFilterDelegation(containerId) {
   container.addEventListener("change", (e) => {
     const c = find(e);
     if (!c) return;
-    if (e.target.classList.contains("en")) {
-      c.f.enabled = e.target.checked;
-      c.row.classList.toggle("disabled", !c.f.enabled);
-    } else {
-      return;
-    }
+    if (!e.target.classList.contains("en")) return;
+    c.f.enabled = e.target.checked;
+    c.row.classList.toggle("disabled", !c.f.enabled);
+    updateGroupToggle("filterEnabled", c.list);
     commit();
   });
 
@@ -1246,14 +1808,19 @@ function setupFilterDelegation(containerId) {
   });
 
   container.addEventListener("click", (e) => {
+    if (!e.target.closest(".del")) return;
     const c = find(e);
     if (!c) return;
-    if (e.target.classList.contains("del")) {
-      const i = c.list.indexOf(c.f);
-      if (i >= 0) c.list.splice(i, 1);
+    const index = c.list.indexOf(c.f);
+    if (index < 0) return;
+    c.list.splice(index, 1);
+    render();
+    commit();
+    showToast(`Removed ${c.f.value || "filter"}`, () => {
+      c.list.splice(Math.min(index, c.list.length), 0, c.f);
       render();
       commit();
-    }
+    });
   });
 }
 
@@ -1273,6 +1840,7 @@ function bindEvents() {
 
   document.getElementById("railPause").addEventListener("click", togglePause);
   document.getElementById("tbPause").addEventListener("click", togglePause);
+  document.getElementById("bannerResume").addEventListener("click", togglePause);
 
   const nameEl = document.getElementById("profileName");
   nameEl.addEventListener("input", () => {
@@ -1293,8 +1861,9 @@ function bindEvents() {
     if (e.key === "Enter") nameEl.blur();
   });
 
-  document.getElementById("tbDelete").addEventListener("click", () => {
-    deleteProfile(activeProfile().id);
+  document.getElementById("tbMore").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openProfileMenu(e.currentTarget);
   });
 
   document.getElementById("railMenu").addEventListener("click", toggleDrawer);
@@ -1323,15 +1892,41 @@ function bindEvents() {
     save();
   });
 
+  document.getElementById("rowDensity").addEventListener("change", (e) => {
+    state.settings.density = e.target.value;
+    applySettings();
+    sizeAllColumns();
+    layoutPins();
+    save();
+  });
+
+  document.getElementById("pinMode").addEventListener("change", (e) => {
+    state.settings.pinMode = e.target.value;
+    applySettings();
+    layoutPins();
+    save();
+  });
+
+  document.getElementById("maskSecrets").addEventListener("change", (e) => {
+    state.settings.maskSecrets = e.target.checked;
+    if (!e.target.checked) revealed.clear();
+    render();
+    save();
+  });
+
   document.getElementById("fontFamily").addEventListener("change", (e) => {
     state.settings.font = e.target.value;
     applySettings();
+    sizeAllColumns();
+    layoutPins();
     save();
   });
 
   document.getElementById("fontSize").addEventListener("change", (e) => {
     state.settings.fontSize = parseInt(e.target.value, 10) || 13;
     applySettings();
+    sizeAllColumns();
+    layoutPins();
     save();
   });
 
@@ -1362,20 +1957,38 @@ function bindEvents() {
     save();
   });
 
-  document.querySelectorAll(".mini-add, .add-row").forEach((btn) => {
-    btn.addEventListener("click", () => addRow(btn.dataset.target));
+  document.getElementById("filterEnabled").addEventListener("change", (e) => {
+    const on = e.target.checked;
+    activeProfile().filters.forEach((f) => (f.enabled = on));
+    render();
+    save();
   });
 
-  document.getElementById("modBtn").addEventListener("click", () => {
-    addRow("request");
-  });
-
-  document.getElementById("filterBtn").addEventListener("click", () => {
-    addRow("filter");
-  });
-  document.getElementById("filterMenuBtn").addEventListener("click", (e) => {
+  // ＋ on a section head. The Filters one opens a menu because the filter you
+  // want is nearly always the tab in front of you.
+  document.addEventListener("click", (e) => {
+    const add = e.target.closest(".sec-add");
+    if (!add) return;
     e.stopPropagation();
-    toggleFilterMenu();
+    if (add.dataset.target === "filter") {
+      toggleFilterMenu();
+      return;
+    }
+    addRow(add.dataset.target);
+  });
+
+  // collapse a section from its head
+  document.addEventListener("click", (e) => {
+    const head = e.target.closest(".sechead");
+    if (!head) return;
+    if (e.target.closest("input, .sec-add")) return;
+    const sec = sectionOf(head);
+    if (!sec) return;
+    const key = sec.dataset.sec;
+    if (collapsed.has(key)) collapsed.delete(key);
+    else collapsed.add(key);
+    applyCollapsed();
+    layoutPins();
   });
 
   const helpOverlay = document.getElementById("helpOverlay");
@@ -1395,12 +2008,21 @@ function bindEvents() {
   helpOverlay.addEventListener("click", (e) => {
     if (e.target === helpOverlay) closeHelp();
   });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeFilterMenu();
-    if (e.key === "Escape" && !document.getElementById("settingsMenu").hidden) {
-      closeSettings();
-    }
-    if (e.key === "Escape" && !helpOverlay.hidden) closeHelp();
+    if (e.key !== "Escape") return;
+    closeFilterMenu();
+    closePopMenu();
+    closeColorMenu();
+    closeDrawer();
+    hideToast();
+    if (!document.getElementById("settingsMenu").hidden) closeSettings();
+    if (!helpOverlay.hidden) closeHelp();
+  });
+
+  window.addEventListener("resize", () => {
+    sizeAllColumns();
+    layoutPins();
   });
 }
 
@@ -1409,22 +2031,28 @@ function addRow(target, item = null) {
   if (target === "request") p.headers.push(newHeader());
   else if (target === "response") p.responseHeaders.push(newHeader());
   else if (target === "filter") p.filters.push(item || newFilter());
+  else return;
+
+  collapsed.delete(target);
   render();
   save();
 
   const map = { request: "requestRows", response: "responseRows", filter: "filterRows" };
   const rows = document.getElementById(map[target]);
   const last = rows && rows.lastElementChild;
-  if (last) {
-    const input = last.querySelector("input[type=text]");
-    if (input) input.focus();
-  }
+  if (!last) return;
+  last.scrollIntoView({ block: "nearest" });
+  layoutPins();
+  const input = last.querySelector("input[type=text]");
+  if (input) input.focus();
 }
 
 (function init() {
   const cached = readCache();
   const hadCache = !!(cached && cached.profiles && cached.profiles.length);
   state = normalize(cached);
+  paintIcons();
+  setupPinning();
   bindEvents();
   render();
   reconcile(hadCache).then(() => notifySurfacePreference(false));
