@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check manifest version matches tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(node -p "require('./manifest.json').version")
+          echo "tag=$tag manifest=$manifest"
+          if [ "$tag" != "$manifest" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match manifest.json version $manifest. Bump manifest.json first."
+            exit 1
+          fi
+
+      - name: Syntax-check JavaScript
+        run: find src -name '*.js' -print -exec node --check {} \;
+
+      - name: Check manifest references resolve
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+            const refs = [
+              m.background?.service_worker,
+              m.action?.default_popup,
+              m.side_panel?.default_path,
+              ...Object.values(m.icons || {}),
+            ].filter(Boolean);
+            const missing = refs.filter((r) => !fs.existsSync(r));
+            for (const r of refs) console.log(`${missing.includes(r) ? "MISS" : "ok  "}  ${r}`);
+            if (missing.length) {
+              console.error(`::error::manifest.json references ${missing.length} missing file(s)`);
+              process.exit(1);
+            }
+          '
+
+      # Stable filename so install scripts can always fetch
+      # releases/latest/download/openmodheader.zip
+      - name: Build zip
+        run: |
+          zip -r openmodheader.zip manifest.json src icons README.md LICENSE
+          unzip -l openmodheader.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openmodheader
+          path: openmodheader.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" openmodheader.zip --generate-notes
