@@ -31,6 +31,7 @@
   --input-bg: transparent;
   --danger-bg: #fde8e8;
   --titlebar-bg: var(--profile-color);
+  --titlebar-paused: #4b5563;
   --titlebar-text: #ffffff;
   --rail-bg: #fafafa;
   --scroll-thumb: #c6ccd4;
@@ -366,6 +367,13 @@ body.paused .rail-pcircle .check {
   background: var(--titlebar-bg);
   color: var(--titlebar-text);
   padding: 8px 8px 8px 12px;
+}
+
+/* Paused drains the profile colour out of the bar, so a paused window is
+   obvious at a glance even when the banner is scrolled past. The profile's
+   own colour is untouched — the rail dot and circle still carry it. */
+body.paused .titlebar {
+  background: var(--titlebar-paused);
 }
 
 .profile-id {
