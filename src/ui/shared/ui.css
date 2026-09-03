@@ -747,6 +747,20 @@ body.paused .banner {
   opacity: 0.45;
 }
 
+/* An enabled row is tinted and carries a coloured rail; a disabled one stays
+   plain. Green is already "live" in this UI — the profile status dot and the
+   filter status dot both use it — so the list reads at a glance. */
+.row:not(.disabled),
+.filter-row:not(.disabled) {
+  border-left-color: var(--green);
+  background: color-mix(in srgb, var(--green) 7%, transparent);
+}
+
+.row:not(.disabled):hover,
+.filter-row:not(.disabled):hover {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+
 .header-row.dragging {
   opacity: 0.42;
 }
@@ -1018,26 +1032,32 @@ body.paused .banner {
    Every enabled header goes into one modifyHeaders action in list order, so
    for two `set` operations on the same name the later one wins.
 
-   The flag is the amber row and nothing else — no badge, no struck-through
+   The flag is the red row and nothing else — no badge, no struck-through
    value — so the row keeps exactly the same shape as every other row in every
    density. Which duplicate actually wins is in the row's tooltip.
    ────────────────────────────────────────────────────────────────────────── */
+/* Red, not amber: a duplicate is not a caution, it is one of the rows silently
+   not being sent. Declared after the enabled-row tint so it wins on a row that
+   is both. */
 .row.conflict {
-  border-left-color: var(--amber-line);
-  background: color-mix(in srgb, var(--amber-bg) 55%, transparent);
+  border-left-color: var(--red);
+  background: color-mix(in srgb, var(--red) 9%, transparent);
 }
 
 .row.conflict:hover {
-  background: var(--amber-bg);
+  background: color-mix(in srgb, var(--red) 16%, transparent);
 }
 
 /* ── FILTER ROWS ─────────────────────────────────────────────────────────── */
 /* no drag handle here, so indent to --row-lead to land on the same left edge */
+/* Same rail and the same --row-lead as .sechead — a filter row has no drag
+   handle, so the lead stands in for the handle and its gap. */
 .filter-row {
   display: flex;
   align-items: center;
   gap: var(--row-gap);
   padding: 4px 6px 4px var(--row-lead);
+  border-left: 2px solid transparent;
   position: relative;
 }
 
