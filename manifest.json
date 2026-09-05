@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenModHeader — Modify HTTP Headers",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "Transparent, readable HTTP request/response header modifier. No tracking, no external servers.",
   "permissions": [
     "declarativeNetRequest",
