@@ -1284,6 +1284,8 @@ function renderFilterRows(containerId, list) {
    list shortens by exactly what the scrollport loses and rows never jump.
    ────────────────────────────────────────────────────────────────────────── */
 let PIN = null;
+let headHeld = false;
+let pinDeferred = false;
 
 function setupPinning() {
   const area = document.querySelector(".listarea");
@@ -1305,6 +1307,35 @@ function setupPinning() {
 
   content.addEventListener("scroll", layoutPins, { passive: true });
   new ResizeObserver(layoutPins).observe(content);
+
+  // A head is pinned by moving the element, and a control whose element moves
+  // between mousedown and mouseup never gets a click at all — the browser has
+  // nothing to deliver it to. That is why the section's own checkbox looked
+  // dead while the rows below it, which never move, were fine. Freeze the
+  // layout for as long as a head is held down.
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.target.closest && e.target.closest(".sechead")) headHeld = true;
+    },
+    true
+  );
+
+  // pointerup runs before the browser dispatches click, so re-laying out here
+  // would move the head out from under the click we are trying to protect.
+  // Yield a task first; click is dispatched synchronously with mouseup.
+  const release = () => {
+    if (!headHeld) return;
+    setTimeout(() => {
+      headHeld = false;
+      if (pinDeferred) {
+        pinDeferred = false;
+        layoutPins();
+      }
+    }, 0);
+  };
+  document.addEventListener("pointerup", release, true);
+  document.addEventListener("pointercancel", release, true);
 }
 
 function pinHead(s) {
@@ -1321,6 +1352,10 @@ function unpinHead(s) {
 
 function layoutPins() {
   if (!PIN) return;
+  if (headHeld) {
+    pinDeferred = true; // re-run on release
+    return;
+  }
   const { area, bar, content, thumb, secs } = PIN;
   const stack = (state.settings && state.settings.pinMode) === "stack";
 
@@ -1867,10 +1902,59 @@ function setupFilterDelegation(containerId) {
   });
 }
 
+/* ── cross-surface sync ───────────────────────────────────────────────────
+   The popup and the side panel are separate documents over the same storage,
+   and each held its own copy of `state` with no way to hear about the other.
+   Whichever wrote last won, so a change made in the popup was silently undone
+   the next time the still-open side panel saved anything — and because the
+   popup is rebuilt on every open while the panel lives on, the popup was
+   always the one that appeared to lose its changes.
+   ────────────────────────────────────────────────────────────────────────── */
+let pendingRemote = null;
+
+function adoptRemote(next) {
+  state = normalize(next);
+  writeCache();
+  render();
+}
+
+// Never yank the ground out from under someone mid-edit: hold the update
+// until the field they are in loses focus.
+function editingInList() {
+  const el = document.activeElement;
+  return !!el && el.matches("input, textarea") && !!el.closest(".rows, .sechead");
+}
+
+function watchStorage() {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[STORAGE_KEY]) return;
+    const next = changes[STORAGE_KEY].newValue;
+    if (!next) return;
+    // Our own save echoes back here; only react to someone else's.
+    if (JSON.stringify(next) === JSON.stringify(state)) return;
+    if (editingInList()) {
+      pendingRemote = next;
+      return;
+    }
+    adoptRemote(next);
+  });
+
+  document.addEventListener("focusout", () => {
+    if (!pendingRemote) return;
+    const next = pendingRemote;
+    pendingRemote = null;
+    // Let the field's own focusout handler commit first.
+    setTimeout(() => {
+      if (JSON.stringify(next) !== JSON.stringify(state)) adoptRemote(next);
+    }, 0);
+  });
+}
+
 function bindEvents() {
   setupHeaderDelegation("requestRows");
   setupHeaderDelegation("responseRows");
   setupFilterDelegation("filterRows");
+  watchStorage();
 
   document.querySelector(".content").addEventListener("dragover", (e) => {
     if (!headerDrag) return;
@@ -1986,23 +2070,23 @@ function bindEvents() {
 
   document.getElementById("settingsClose").addEventListener("click", closeSettings);
 
-  document.getElementById("requestEnabled").addEventListener("change", (e) => {
-    const on = e.target.checked;
-    activeProfile().headers.forEach((h) => (h.enabled = on));
-    render();
-    save();
-  });
+  // Delegated, not bound to the three elements directly: a section head is
+  // moved into the pin bar and back as the list scrolls, so anything holding a
+  // reference to one of these checkboxes is holding it across a DOM move. The
+  // rest of the app already listens this way; these three were the exception.
+  const GROUP_TOGGLES = {
+    requestEnabled: (p) => p.headers,
+    responseEnabled: (p) => p.responseHeaders,
+    filterEnabled: (p) => p.filters,
+  };
 
-  document.getElementById("responseEnabled").addEventListener("change", (e) => {
+  document.addEventListener("change", (e) => {
+    const pick = GROUP_TOGGLES[e.target.id];
+    if (!pick) return;
+    // From the indeterminate (part-on) state a click resolves to checked, so
+    // the first click turns everything on and the next turns everything off.
     const on = e.target.checked;
-    activeProfile().responseHeaders.forEach((h) => (h.enabled = on));
-    render();
-    save();
-  });
-
-  document.getElementById("filterEnabled").addEventListener("change", (e) => {
-    const on = e.target.checked;
-    activeProfile().filters.forEach((f) => (f.enabled = on));
+    pick(activeProfile()).forEach((item) => (item.enabled = on));
     render();
     save();
   });
