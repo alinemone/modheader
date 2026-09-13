@@ -318,6 +318,23 @@ function openProfileMenu(anchor) {
     duplicateProfile();
   });
 
+  // Side features register themselves here rather than being wired in by
+  // name, so this file stays about profiles and headers and knows nothing
+  // about what the extra entries do. See src/ui/cookies/cookies.js.
+  const extras = (window.OpenModHeaderMenuItems || []).map((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerHTML = item.icon || "";
+    const label = document.createElement("span");
+    label.textContent = item.label || "";
+    btn.appendChild(label);
+    btn.addEventListener("click", () => {
+      closePopMenu();
+      item.run();
+    });
+    return btn;
+  });
+
   const sep = document.createElement("div");
   sep.className = "sep";
 
@@ -330,7 +347,7 @@ function openProfileMenu(anchor) {
     deleteProfile(activeProfile().id);
   });
 
-  menu.append(dup, sep, del);
+  menu.append(dup, ...extras, sep, del);
   document.body.appendChild(menu);
 
   const r = anchor.getBoundingClientRect();

@@ -1,0 +1,673 @@
+/* ==========================================================================
+   Cookies panel.
+
+   Every selector here is prefixed ck- and nothing in shared/ui.css is
+   overridden, so this file can be dropped without touching the rest of the
+   UI. It does not merely read the shared tokens — it mirrors the header
+   list's language so the two halves of the extension read as one product:
+
+     · the overlay shell copies .help-overlay / .help-panel
+     · a cookie row is a .row — a flat, full-bleed band with a 2px left rail,
+       a hairline between neighbours and a coloured rail when something is
+       wrong, never a card floating in a padded column
+     · metrics derive from --row-font-size, so the font-size and density
+       settings move this panel exactly as much as they move the list
+     · the accent is --maroon, i.e. --profile-color, which app.js writes onto
+       the document element. It is the active profile's own colour and this
+       panel re-tints with it the moment the profile changes, exactly like the
+       title bar and the rail. Green and red keep their meanings from the list
+       — live and not-being-sent — because those are status, not theme.
+   ========================================================================== */
+
+.ck-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+}
+
+.ck-overlay[hidden] {
+  display: none;
+}
+
+.ck-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+
+  /* Row metrics derive from the font-size setting exactly as .app's do, so a
+     cookie row and a header row never drift apart. */
+  --rf: var(--row-font-size, 13px);
+  --l1-h: calc(var(--rf) + 3px);
+  --row-gap: 5px;
+
+  /* one height for every control in the panel: search, scope, buttons, inputs */
+  --ctl-h: calc(var(--rf) + 15px);
+
+  /* One gutter for the whole panel — head, tools, rows and foot share it.
+     The list indents its rows to --row-lead because a drag handle and a
+     checkbox live in that space; a cookie row has neither, so borrowing that
+     lead here would only be a wide empty margin. */
+  --ck-x: 12px;
+}
+
+/* ── HEAD ─────────────────────────────────────────────────────────────────
+   Same shape as .help-head: surface-strong, a maroon heading and a hairline.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 12px 12px var(--ck-x);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.ck-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ck-heading h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--maroon);
+  font-size: 17px;
+}
+
+.ck-heading h2 svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+/* a host is a value, and values are mono in this UI */
+.ck-host {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: calc(var(--rf) - 1.5px);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── SHARED CONTROLS ─────────────────────────────────────────────────────── */
+.ck-panel svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* .rail-btn / .help-head button */
+.ck-ghost {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ck-ghost svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ck-ghost:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* The active profile's own colour, taken live from --profile-color, so this
+   button is the same ink as the title bar above it and follows the profile
+   when the user recolours it. White text on it for the same reason the title
+   bar's text is white: every colour in the picker is dark enough to carry it. */
+.ck-primary {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--ctl-h);
+  padding: 0 11px;
+  border: 1px solid var(--maroon);
+  border-radius: 7px;
+  background: var(--maroon);
+  color: #fff;
+  font-family: inherit;
+  font-size: calc(var(--rf) - 0.5px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ck-primary svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
+
+/* A thin white veil rather than a second hard-coded shade: the profile colour
+   is whatever the user picked, so the hover has to be derived from it. Same
+   move the title bar makes for .tb-btn:hover. */
+.ck-primary:hover {
+  background: color-mix(in srgb, var(--maroon) 86%, #fff);
+  border-color: color-mix(in srgb, var(--maroon) 86%, #fff);
+}
+
+/* .popmenu button, without the menu around it */
+.ck-ghost-text {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: calc(var(--rf) - 1px);
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.ck-ghost-text:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* ── TOOLS ────────────────────────────────────────────────────────────────
+   Reads as a section head: same left edge as the rows beneath it, same
+   hairline, same surface.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--row-gap);
+  padding: 6px 6px 6px var(--ck-x);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.ck-tools[hidden] {
+  display: none;
+}
+
+.ck-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--ctl-h);
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: calc(var(--rf) - 0.5px);
+}
+
+.ck-search:focus,
+.ck-form input:focus,
+.ck-form textarea:focus,
+.ck-form select:focus,
+.ck-scope:focus {
+  outline: none;
+  border-color: var(--maroon);
+}
+
+.ck-scope {
+  flex: 0 0 auto;
+  height: var(--ctl-h);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: calc(var(--rf) - 1px);
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+/* ── BODY ─────────────────────────────────────────────────────────────────
+   The list is full-bleed like .content, and the scrollbar is tinted with the
+   same token the overlay thumb uses next door.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+.ck-list {
+  padding: 6px 0 10px;
+}
+
+.ck-list[hidden] {
+  display: none;
+}
+
+/* .empty-note */
+.ck-note {
+  margin: 20px var(--ck-x);
+  color: var(--muted);
+  font-size: calc(var(--rf) - 1px);
+  text-align: center;
+}
+
+.ck-note small {
+  display: block;
+  margin-top: 5px;
+  color: var(--faint);
+  font-size: calc(var(--rf) - 2px);
+}
+
+/* ── ONE COOKIE ───────────────────────────────────────────────────────────
+   A .row, in every respect: a square full-bleed band that meets both walls,
+   a hairline between neighbours instead of a border all the way round, and a
+   2px rail on the left that stays transparent until it has something to say.
+   ────────────────────────────────────────────────────────────────────────── */
+/* The 2px rail is taken out of the gutter rather than added to it, so a row's
+   text starts on the same left edge as the head, the tools and the foot
+   whether or not the rail is lit. */
+.ck-item {
+  position: relative;
+  padding: 4px 6px 6px calc(var(--ck-x) - 2px);
+  border-left: 2px solid transparent;
+}
+
+.ck-item + .ck-item {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+
+.ck-item:hover {
+  background: var(--hover);
+}
+
+/* Red, and the same red as a duplicate header: an expired cookie is not a
+   caution, it is a row the browser has already stopped sending. */
+.ck-item.ck-dead {
+  border-left-color: var(--red);
+  background: color-mix(in srgb, var(--red) 9%, transparent);
+}
+
+.ck-item.ck-dead:hover {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+}
+
+.ck-line {
+  display: flex;
+  align-items: center;
+  gap: var(--row-gap);
+}
+
+/* the name is what the row is — sans and 600, exactly like .row .name */
+.ck-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  font-size: calc(var(--rf) - 1px);
+  font-weight: 600;
+  line-height: var(--l1-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── ROW ACTIONS ─────────────────────────────────────────────────────────
+   .ract: visible at rest, solid on hover.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-acts {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ck-act {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--icon);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.ck-item:hover .ck-act,
+.ck-item:focus-within .ck-act {
+  opacity: 1;
+}
+
+.ck-act svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.9;
+}
+
+.ck-act:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.ck-act.ck-danger:hover {
+  background: var(--danger-bg);
+  color: var(--red);
+}
+
+/* Line 2 is the value, directly under the name and in the same mono and the
+   same muted ink as .row .value. Values run to hundreds of characters, so it
+   is clamped to two lines and opens on click rather than pushing every other
+   cookie off the screen. */
+.ck-val {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  width: 100%;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--val-text);
+  font-family: var(--mono);
+  font-size: calc(var(--rf) - 2px);
+  line-height: 1.45;
+  direction: ltr;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+.ck-val.open {
+  display: block;
+  max-height: 190px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+.ck-val:hover {
+  color: var(--text);
+}
+
+.ck-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+/* .gcount — the count pill on a section head */
+.ck-chip {
+  padding: 2px 7px;
+  border: none;
+  border-radius: 20px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: calc(var(--rf) - 2.5px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ck-chip.good {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  color: var(--green);
+}
+
+.ck-chip.warn {
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red);
+}
+
+/* ── EDITOR ──────────────────────────────────────────────────────────────── */
+.ck-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px var(--ck-x) 16px;
+}
+
+.ck-form[hidden] {
+  display: none;
+}
+
+.ck-form-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 2px;
+}
+
+.ck-form-head strong {
+  font-size: calc(var(--rf) + 0.5px);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the chevron points down in the shared icon set; here it is a back arrow */
+.ck-back svg {
+  transform: rotate(90deg);
+}
+
+.ck-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ck-field > span {
+  color: var(--muted);
+  font-size: calc(var(--rf) - 1.5px);
+  font-weight: 600;
+}
+
+.ck-field small {
+  color: var(--faint);
+  font-size: calc(var(--rf) - 2.5px);
+}
+
+.ck-form input[type="text"],
+.ck-form input[type="datetime-local"],
+.ck-form textarea,
+.ck-form select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: calc(var(--rf) - 0.5px);
+  padding: 6px 8px;
+}
+
+.ck-form textarea {
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: calc(var(--rf) - 2px);
+  line-height: 1.5;
+  direction: ltr;
+  word-break: break-all;
+}
+
+.ck-form input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ck-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ck-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.ck-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: calc(var(--rf) - 1px);
+  cursor: pointer;
+}
+
+/* same size as the list's checkboxes, tinted with the profile colour */
+.ck-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--maroon);
+  cursor: pointer;
+}
+
+/* .banner — the one amber surface in the app */
+.ck-error {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--amber-line);
+  border-radius: 7px;
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: calc(var(--rf) - 1.5px);
+  font-weight: 500;
+}
+
+.ck-error[hidden] {
+  display: none;
+}
+
+.ck-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+/* ── FOOT ─────────────────────────────────────────────────────────────────
+   .footer.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px var(--ck-x);
+  border-top: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ck-foot[hidden] {
+  display: none;
+}
+
+.ck-count {
+  flex: 1 1 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── TOAST ────────────────────────────────────────────────────────────────
+   .toast, minus the undo button it has nothing to put there.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 95;
+  max-width: calc(100% - 28px);
+  padding: 9px 14px;
+  border-radius: 9px;
+  background: #23272e;
+  color: #f2f5f9;
+  font-size: 12.5px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── DENSITY ──────────────────────────────────────────────────────────────
+   The setting means the same thing here as it does in the list: the same
+   parts, folded tighter. A compact value gets one line instead of two.
+   ────────────────────────────────────────────────────────────────────────── */
+html[data-density="compact"] .ck-item {
+  padding-top: 3px;
+  padding-bottom: 4px;
+}
+
+html[data-density="compact"] .ck-val {
+  -webkit-line-clamp: 1;
+}
+
+html[data-density="compact"] .ck-meta {
+  margin-top: 4px;
+}
+
+/* ── SIDE PANEL ──────────────────────────────────────────────────────────────
+   The panel is far narrower than the popup, so the overlay goes full-bleed
+   and the two-up rows in the editor fold into one column.
+   ────────────────────────────────────────────────────────────────────────── */
+html[data-surface="sidePanel"] .ck-overlay {
+  padding: 0;
+}
+
+html[data-surface="sidePanel"] .ck-panel {
+  max-width: none;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html[data-surface="sidePanel"] .ck-toast {
+  bottom: 66px;
+}
+
+@media (max-width: 420px) {
+  .ck-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* The tools stay one line however narrow the surface gets: the search box
+     gives up width, the scope and the Add button keep theirs. Wrapping them
+     cost a whole row of a panel that has none to spare. */
+  .ck-tools {
+    gap: 4px;
+    padding-right: 4px;
+  }
+
+  .ck-primary {
+    padding: 0 8px;
+  }
+}
