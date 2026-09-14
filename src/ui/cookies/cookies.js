@@ -2,13 +2,19 @@
    Cookies — a self-contained side feature.
 
    Nothing in here reads or writes header state, profiles, or any internal of
-   shared/app.js. The single seam is the registration at the very bottom: the
-   ⋯ menu asks window.OpenModHeaderMenuItems for extra entries, and this file
-   pushes one. Delete this folder and the two tags that load it from the two
-   index.html files and the extension is exactly what it was before.
+   shared/app.js. The only seam is window.OpenModHeaderApi, the short list of
+   verbs app.js publishes for bolt-on features. Delete this folder and the two
+   tags that load it from the two index.html files and the extension is exactly
+   what it was before.
 
-   The panel is built entirely from script, so neither index.html carries any
-   cookie markup, and one implementation serves the popup and the side panel.
+   It is a PAGE, not a dialog: the cookie list replaces the header list inside
+   the same .main column, under the same title bar, so both halves of the
+   extension share one chrome, one type scale and one set of settings. The
+   title bar button swaps between a cookie and a back-to-the-list glyph, which
+   is the whole of the navigation.
+
+   Both surfaces are served by this one file — neither index.html carries any
+   cookie markup.
    ========================================================================== */
 (function () {
   "use strict";
@@ -23,9 +29,22 @@
       '<circle cx="9" cy="10" r="1.05" fill="currentColor" stroke="none"/>' +
       '<circle cx="8.6" cy="15.4" r="1.05" fill="currentColor" stroke="none"/>' +
       '<circle cx="14" cy="15" r="1.05" fill="currentColor" stroke="none"/>',
+    // the way back to the header list — a plain back arrow, which is the one
+    // glyph nobody has to decode
+    back: '<path d="M19.2 12H4.8"/><path d="M11.2 5.2 4.4 12l6.8 6.8"/>',
     copy:
       '<rect x="9" y="9" width="11" height="11" rx="2.2"/>' +
       '<path d="M5.5 15.2A1.7 1.7 0 0 1 4 13.5V6a2 2 0 0 1 2-2h7.5a1.7 1.7 0 0 1 1.7 1.5"/>',
+    // send this one into the request headers: an arrow meeting the wall the
+    // list lives behind
+    toheader:
+      '<path d="M3 12h11.4"/><path d="M11 8.4 14.6 12 11 15.6"/>' +
+      '<path d="M18.6 4.6v14.8"/>',
+    // send this one to another site: a globe, because that is the only thing
+    // that changes about the copy
+    tourl:
+      '<circle cx="12" cy="12" r="8.2"/><path d="M3.9 12h16.2"/>' +
+      '<path d="M12 3.8c2.1 2.3 3.2 5.1 3.2 8.2s-1.1 5.9-3.2 8.2c-2.1-2.3-3.2-5.1-3.2-8.2S9.9 6.1 12 3.8Z"/>',
     pencil:
       '<path d="M4 20.1h4.2L19 9.3a2.2 2.2 0 0 0-3.1-3.1L5.1 17V20Z"/>' +
       '<path d="M14.4 7.6l3.1 3.1"/>',
@@ -44,17 +63,23 @@
   }
 
   /* ── module state ───────────────────────────────────────────────────── */
-  let root = null; // the overlay, built once and reused
-  let el = null; // named handles into that overlay
+  const TARGET_KEY = "openheader_cookie_target";
+  const DEFAULT_TARGET = "http://localhost";
+
+  let page = null; // the .ck-page column, built once and reused
+  let navBtn = null; // the title bar button that opens and closes it
+  let el = null; // named handles into the page
   let tab = null; // { url, origin, host, hostname, protocol }
   let cookies = []; // whatever the last read returned
   let scope = "url"; // "url" — sent to this exact URL · "domain" — whole site
   let query = "";
+  let target = DEFAULT_TARGET; // where the transfer button copies cookies to
   let editing = null; // the cookie being edited, or null while adding
   let loadToken = 0; // guards against a slow read landing after a newer one
   const expanded = new Set();
 
   const keyOf = (c) => `${c.domain}|${c.path}|${c.name}`;
+  const isOpen = () => document.documentElement.dataset.view === "cookies";
 
   /* ── clipboard ──────────────────────────────────────────────────────── */
   async function copyText(text, message) {
@@ -147,6 +172,43 @@
     await chrome.cookies.remove({ url: cookieUrl(c), name: c.name });
   }
 
+  /* ── the transfer target ────────────────────────────────────────────────
+     One address for the whole feature, remembered across both surfaces the
+     same way the profiles are. localhost by default, because copying a live
+     session onto the app you are developing is what this is for.
+     ────────────────────────────────────────────────────────────────────── */
+  function parseTarget(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return null;
+    try {
+      const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : "http://" + text);
+      if (!["http:", "https:"].includes(url.protocol)) return null;
+      if (!url.hostname) return null;
+      return url;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function loadTarget() {
+    try {
+      const stored = await chrome.storage.local.get(TARGET_KEY);
+      const value = stored && stored[TARGET_KEY];
+      if (typeof value === "string" && value.trim()) target = value.trim();
+    } catch (e) {}
+  }
+
+  let targetTimer = null;
+  function saveTarget(value) {
+    target = value;
+    clearTimeout(targetTimer);
+    targetTimer = setTimeout(() => {
+      try {
+        chrome.storage.local.set({ [TARGET_KEY]: value });
+      } catch (e) {}
+    }, 250);
+  }
+
   /* ── formatting ─────────────────────────────────────────────────────── */
   function expiryText(c) {
     if (c.session || !c.expirationDate) return "session";
@@ -194,34 +256,29 @@
     );
   }
 
-  /* ── the overlay ────────────────────────────────────────────────────── */
+  /* ── the page ───────────────────────────────────────────────────────────
+     Built into .main, next to the header list it replaces, so it inherits
+     the title bar, the rail and every one of the appearance settings.
+     ────────────────────────────────────────────────────────────────────── */
   function build() {
-    if (root) return;
+    if (page) return;
 
-    root = document.createElement("div");
-    root.className = "ck-overlay";
-    root.hidden = true;
+    page = document.createElement("div");
+    page.className = "ck-page";
 
-    const panel = document.createElement("section");
-    panel.className = "ck-panel";
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-modal", "true");
-    panel.setAttribute("aria-label", "Cookies for the current site");
-
-    /* head */
-    const head = document.createElement("header");
+    /* head — what you are looking at, and a way to re-read it */
+    const head = document.createElement("div");
     head.className = "ck-head";
 
-    const heading = document.createElement("div");
-    heading.className = "ck-heading";
-    const title = document.createElement("h2");
+    const title = document.createElement("strong");
+    title.className = "ck-title";
     title.innerHTML = icon("cookie");
     const titleText = document.createElement("span");
     titleText.textContent = "Cookies";
     title.appendChild(titleText);
-    const host = document.createElement("p");
+
+    const host = document.createElement("span");
     host.className = "ck-host";
-    heading.append(title, host);
 
     const refresh = document.createElement("button");
     refresh.type = "button";
@@ -231,15 +288,7 @@
     refresh.innerHTML = icon("refresh");
     refresh.addEventListener("click", () => load());
 
-    const close = document.createElement("button");
-    close.type = "button";
-    close.className = "ck-ghost";
-    close.title = "Close";
-    close.setAttribute("aria-label", "Close cookies");
-    close.innerHTML = icon("x");
-    close.addEventListener("click", hide);
-
-    head.append(heading, refresh, close);
+    head.append(title, host, refresh);
 
     /* tools */
     const tools = document.createElement("div");
@@ -332,15 +381,173 @@
 
     foot.append(count, copyHeader, copyJson);
 
-    panel.append(head, tools, body, foot);
-    root.appendChild(panel);
-    document.body.appendChild(root);
+    page.append(head, tools, body, foot);
 
-    root.addEventListener("click", (e) => {
-      if (e.target === root) hide();
+    const main = document.querySelector(".main");
+    const footer = main && main.querySelector(".footer");
+    if (footer) main.insertBefore(page, footer);
+    else (main || document.body).appendChild(page);
+
+    el = { host, tools, search, scopeSel, list, form, count, foot };
+  }
+
+  /* ── the transfer dialog ────────────────────────────────────────────────
+     Both transfers ask before they act. A cookie's own name is almost never
+     the name the other side wants — a session cookie becomes an X-Auth-Token
+     header, or a cookie from prod is filed under a different name on the dev
+     host — so the key and the value are editable, pre-filled with the cookie
+     as it stands. Confirming is one Enter away when nothing needs changing.
+     ────────────────────────────────────────────────────────────────────── */
+  let modal = null;
+
+  function closeModal() {
+    if (!modal) return;
+    modal.remove();
+    modal = null;
+  }
+
+  /* One field of a dialog. The kinds are exactly the kinds the cookie editor
+     already uses, so a dialog and the editor are the same form twice. */
+  function renderField(f, inputs) {
+    if (f.type === "grid") {
+      const grid = document.createElement("div");
+      grid.className = "ck-grid";
+      f.fields.forEach((sub) => grid.appendChild(renderField(sub, inputs)));
+      return grid;
+    }
+
+    if (f.type === "checks") {
+      const flags = document.createElement("div");
+      flags.className = "ck-flags";
+      f.items.forEach((item) => {
+        const box = checkbox(item.label, item.checked);
+        inputs[item.key] = box.input;
+        flags.appendChild(box);
+      });
+      return flags;
+    }
+
+    let control;
+    if (f.type === "textarea") {
+      control = document.createElement("textarea");
+      control.rows = 3;
+    } else if (f.type === "select") {
+      control = document.createElement("select");
+      f.options.forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        control.appendChild(option);
+      });
+    } else if (f.type === "datetime") {
+      control = document.createElement("input");
+      control.type = "datetime-local";
+    } else {
+      control = document.createElement("input");
+      control.type = "text";
+      // Same suggestions, and the same on-focus attachment, as a header name
+      // in the list: a datalist left attached shows its arrow at all times.
+      if (f.list) {
+        control.addEventListener("focus", () => control.setAttribute("list", f.list));
+        control.addEventListener("blur", () => control.removeAttribute("list"));
+      }
+    }
+
+    control.spellcheck = false;
+    control.value = f.value == null ? "" : f.value;
+    if (f.placeholder) control.placeholder = f.placeholder;
+    if (f.mono) control.classList.add("ck-mono");
+    inputs[f.key] = control;
+    return field(f.label, control, f.hint);
+  }
+
+  function openModal(spec) {
+    closeModal();
+
+    modal = document.createElement("div");
+    modal.className = "ck-modal";
+
+    const form = document.createElement("form");
+    form.className = "ck-modal-panel";
+    form.setAttribute("role", "dialog");
+    form.setAttribute("aria-modal", "true");
+    form.setAttribute("aria-label", spec.title);
+
+    const head = document.createElement("div");
+    head.className = "ck-modal-head";
+    const title = document.createElement("strong");
+    title.innerHTML = icon(spec.icon);
+    const titleText = document.createElement("span");
+    titleText.textContent = spec.title;
+    title.appendChild(titleText);
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "ck-ghost";
+    close.title = "Cancel";
+    close.setAttribute("aria-label", "Cancel");
+    close.innerHTML = icon("x");
+    close.addEventListener("click", closeModal);
+    head.append(title, close);
+
+    const sub = document.createElement("p");
+    sub.className = "ck-modal-sub";
+    sub.textContent = spec.subtitle || "";
+    sub.hidden = !spec.subtitle;
+
+    const inputs = {};
+    const body = document.createElement("div");
+    body.className = "ck-modal-body";
+    spec.fields.forEach((f) => body.appendChild(renderField(f, inputs)));
+
+    const error = document.createElement("p");
+    error.className = "ck-error";
+    error.hidden = true;
+
+    const actions = document.createElement("div");
+    actions.className = "ck-form-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "ck-ghost-text";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", closeModal);
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "ck-primary";
+    submit.textContent = spec.confirm;
+    actions.append(cancel, submit);
+
+    form.append(head, sub, body, error, actions);
+    modal.appendChild(form);
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
     });
 
-    el = { panel, host, tools, search, scopeSel, list, form, count, foot };
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      error.hidden = true;
+      const values = {};
+      Object.keys(inputs).forEach((k) => {
+        const control = inputs[k];
+        values[k] = control.type === "checkbox" ? control.checked : control.value;
+      });
+      const problem = await spec.onSubmit(values);
+      if (problem) {
+        error.textContent = problem;
+        error.hidden = false;
+        return;
+      }
+      closeModal();
+    });
+
+    page.appendChild(modal);
+    if (spec.onBuild) spec.onBuild(inputs);
+
+    const first = Object.values(inputs)[0];
+    if (first) {
+      first.focus();
+      if (first.select) first.select();
+    }
   }
 
   /* ── list view ──────────────────────────────────────────────────────── */
@@ -369,7 +576,7 @@
 
     if (!tab) {
       el.list.appendChild(
-        note("No site to read", "Open an HTTP or HTTPS tab and reload this panel.")
+        note("No site to read", "Open an HTTP or HTTPS tab and reload this page.")
       );
       el.count.textContent = "";
       return;
@@ -424,6 +631,8 @@
     acts.className = "ck-acts";
     [
       ["copy", "copy", "Copy value"],
+      ["toheader", "toheader", "Send to a request header…"],
+      ["tourl", "tourl", "Copy to another site…"],
       ["edit", "pencil", "Edit cookie"],
       ["del", "trash", "Delete cookie"],
     ].forEach(([act, glyph, label]) => {
@@ -486,12 +695,183 @@
       return;
     }
 
+    if (act === "toheader") {
+      sendToHeaders(c);
+      return;
+    }
+
+    if (act === "tourl") {
+      sendToTarget(c);
+      return;
+    }
+
     if (act === "edit") {
       showForm(c);
       return;
     }
 
     if (act === "del") remove(c);
+  }
+
+  /* ── the two transfers ──────────────────────────────────────────────── */
+  function sendToHeaders(c) {
+    openModal({
+      icon: "toheader",
+      title: "Send to a request header",
+      subtitle:
+        "The cookie goes into the active profile as a request header under its " +
+        "own name. Change the name if the server expects another one.",
+      confirm: "Add to headers",
+      fields: [
+        {
+          key: "name",
+          label: "Header name",
+          value: c.name,
+          // the same suggestion list the request rows use, so the standard
+          // header names are one keystroke away when the cookie's own name is
+          // not what you want
+          list: "reqHeaderNames",
+          hint: "Clear it to pick from the standard request headers",
+          mono: true,
+        },
+        { key: "value", label: "Value", value: c.value || "", type: "textarea", mono: true },
+      ],
+      onSubmit: ({ name, value }) => {
+        const api = window.OpenModHeaderApi;
+        if (!api || !api.setRequestHeader) {
+          return "The header list is not available here.";
+        }
+        const headerName = name.trim();
+        if (!headerName) return "A header needs a name.";
+
+        const outcome = api.setRequestHeader(headerName, value);
+        toast(
+          outcome === "updated"
+            ? `Updated the ${headerName} header`
+            : `Added the ${headerName} request header`
+        );
+        return null;
+      },
+    });
+  }
+
+  function sendToTarget(c) {
+    const isSession = !!c.session || !c.expirationDate;
+
+    openModal({
+      icon: "tourl",
+      title: "Copy to another site",
+      subtitle:
+        "Everything is pre-filled from this cookie and every part of it can be " +
+        "changed. The copy belongs to the target host only.",
+      confirm: "Write cookie",
+      fields: [
+        {
+          key: "url",
+          label: "Address",
+          value: target,
+          placeholder: DEFAULT_TARGET,
+          hint: "A path in the address becomes the cookie's path",
+          mono: true,
+        },
+        { key: "name", label: "Name", value: c.name, mono: true },
+        { key: "value", label: "Value", value: c.value || "", type: "textarea", mono: true },
+        {
+          type: "grid",
+          fields: [
+            {
+              key: "sameSite",
+              label: "SameSite",
+              type: "select",
+              value: c.sameSite || "unspecified",
+              options: [
+                ["unspecified", "Unspecified"],
+                ["lax", "Lax"],
+                ["strict", "Strict"],
+                ["no_restriction", "None (needs Secure)"],
+              ],
+            },
+            {
+              key: "expires",
+              label: "Expires",
+              type: "datetime",
+              value: c.expirationDate ? toLocalInput(c.expirationDate) : "",
+            },
+          ],
+        },
+        {
+          type: "checks",
+          items: [
+            { key: "session", label: "Session cookie", checked: isSession },
+            { key: "secure", label: "Secure", checked: !!c.secure },
+            { key: "httpOnly", label: "HttpOnly", checked: !!c.httpOnly },
+          ],
+        },
+      ],
+
+      // The same two interlocks the editor has: an expiry means nothing on a
+      // session cookie, and Chrome refuses SameSite=None without Secure.
+      onBuild: (i) => {
+        const syncExpiry = () => {
+          i.expires.disabled = i.session.checked;
+          if (!i.session.checked && !i.expires.value) {
+            i.expires.value = toLocalInput(Date.now() / 1000 + 30 * 86400);
+          }
+        };
+        i.session.addEventListener("change", syncExpiry);
+        syncExpiry();
+
+        const syncSecure = () => {
+          const forced = i.sameSite.value === "no_restriction";
+          if (forced) i.secure.checked = true;
+          i.secure.disabled = forced;
+        };
+        i.sameSite.addEventListener("change", syncSecure);
+        syncSecure();
+      },
+
+      onSubmit: async (v) => {
+        const url = parseTarget(v.url);
+        if (!url) return "Enter an http or https address.";
+        const cookieName = v.name.trim();
+        if (!cookieName) return "A cookie needs a name.";
+
+        const path = url.pathname && url.pathname !== "/" ? url.pathname : "/";
+
+        // No domain: the copy is host-only on the target, which is what you
+        // want for localhost and never worse elsewhere.
+        const details = {
+          url: `${url.protocol}//${url.host}${path}`,
+          name: cookieName,
+          value: v.value,
+          path,
+          secure: v.secure,
+          httpOnly: v.httpOnly,
+          sameSite: v.sameSite,
+        };
+
+        if (!v.session) {
+          const seconds = fromLocalInput(v.expires);
+          if (seconds === null) {
+            return "Pick an expiry date, or mark it as a session cookie.";
+          }
+          details.expirationDate = seconds;
+        }
+
+        try {
+          await writeCookie(details);
+        } catch (err) {
+          return err.message || `Could not write ${cookieName} to ${url.host}.`;
+        }
+
+        // Remembered for next time: the address is nearly always the same one
+        // twice running.
+        saveTarget(v.url.trim());
+        toast(`Copied ${cookieName} to ${url.host}`);
+        if (tab && url.hostname === tab.hostname) load();
+        return null;
+      },
+    });
   }
 
   async function remove(c) {
@@ -790,16 +1170,19 @@
 
   /* ── open and close ─────────────────────────────────────────────────── */
   function onKeydown(e) {
-    if (e.key !== "Escape" || !root || root.hidden) return;
-    // Swallow it: app.js also listens for Escape, and this panel sits on top.
+    if (e.key !== "Escape" || !isOpen()) return;
+    // Swallow it: app.js also listens for Escape, and it would close things
+    // behind this page that the user cannot even see.
     e.stopPropagation();
-    hide();
+    if (modal) closeModal();
+    else if (el && !el.form.hidden) showList();
+    else showHeaders();
   }
 
   // While the side panel stays open the user keeps browsing, so the list has
   // to follow the tab it claims to be describing.
   const reload = () => {
-    if (root && !root.hidden && el.form.hidden) load();
+    if (isOpen() && el && el.form.hidden) load();
   };
 
   let watching = false;
@@ -820,7 +1203,15 @@
     }
   }
 
-  function show() {
+  function setNav(open) {
+    if (!navBtn) return;
+    navBtn.innerHTML = icon(open ? "back" : "cookie");
+    navBtn.title = open ? "Back to the header list" : "Cookies for this site";
+    navBtn.setAttribute("aria-label", navBtn.title);
+    navBtn.classList.toggle("on", open);
+  }
+
+  function showCookies() {
     if (!chrome.cookies) {
       alert(
         'The "cookies" permission is missing. Reload the extension after updating the manifest.'
@@ -834,27 +1225,46 @@
     el.search.value = "";
     el.scopeSel.value = scope;
     expanded.clear();
-    root.hidden = false;
-    document.body.classList.add("ck-open");
+    document.documentElement.dataset.view = "cookies";
+    setNav(true);
     document.addEventListener("keydown", onKeydown, true);
     load();
   }
 
-  function hide() {
-    if (!root) return;
-    root.hidden = true;
-    document.body.classList.remove("ck-open");
+  function showHeaders() {
+    closeModal();
+    delete document.documentElement.dataset.view;
+    setNav(false);
     document.removeEventListener("keydown", onKeydown, true);
+    // The list spent this whole time at zero width, so nothing it measured
+    // while hidden can be trusted.
+    const api = window.OpenModHeaderApi;
+    if (api && api.refreshLayout) api.refreshLayout();
   }
 
-  /* ── the one seam ───────────────────────────────────────────────────────
-     app.js reads this array when it builds the ⋯ menu. It never learns what
-     the entry is for.
+  /* ── the title bar button ───────────────────────────────────────────────
+     Inserted rather than declared in the two index.html files, so removing
+     this folder removes the button with it. It lands between pause and ⋯:
+     reading the bar from the right that is ⋯, cookies, pause, ＋.
      ────────────────────────────────────────────────────────────────────── */
-  window.OpenModHeaderMenuItems = window.OpenModHeaderMenuItems || [];
-  window.OpenModHeaderMenuItems.push({
-    icon: icon("cookie"),
-    label: "Cookies for this site",
-    run: show,
-  });
+  function mount() {
+    const more = document.getElementById("tbMore");
+    const bar = more && more.parentElement;
+    if (!bar) return;
+
+    navBtn = document.createElement("button");
+    navBtn.type = "button";
+    navBtn.id = "tbCookies";
+    navBtn.className = "tb-btn";
+    setNav(false);
+    navBtn.addEventListener("click", () => {
+      if (isOpen()) showHeaders();
+      else showCookies();
+    });
+
+    bar.insertBefore(navBtn, more);
+    loadTarget();
+  }
+
+  mount();
 })();

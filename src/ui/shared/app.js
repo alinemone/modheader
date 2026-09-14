@@ -23,9 +23,18 @@ function detectSurface() {
 
 document.documentElement.dataset.surface = detectSurface();
 
+/* Fifteen, laid out as the picker's three rows of five: warm, then green to
+   cyan, then blue to purple with the two neutrals at the end. Index 0 is the
+   default colour for a new profile.
+
+   Every one of them carries white text — the title bar, the rail circle and
+   the cookie page's primary button all put #fff on the profile colour and
+   none of them re-checks. The lightest here clears 4.9:1 against white, so
+   anything added later has to be at least this dark. */
 const PROFILE_COLORS = [
-  "#6d071a", "#d32f2f", "#e8710a", "#c79100", "#2e7d32",
-  "#0f766e", "#1a73e8", "#3f51b5", "#7b1fa2", "#455a64",
+  "#6d071a", "#c2185b", "#d32f2f", "#e8710a", "#c79100", // maroon · raspberry · red · orange · gold
+  "#4d7c0f", "#2e7d32", "#0f766e", "#0e7490", "#1a73e8", // olive · green · teal · ocean · blue
+  "#1e3a8a", "#3f51b5", "#7b1fa2", "#6d4c41", "#455a64", // navy · indigo · purple · cocoa · slate
 ];
 
 const UI_FONTS = {
@@ -2169,6 +2178,59 @@ function bindEvents() {
     layoutPins();
   });
 }
+
+/* ── the side-feature seam ────────────────────────────────────────────────
+   Everything a bolt-on feature is allowed to do to the profile lives here,
+   in as few verbs as possible. app.js never calls any of it and never learns
+   who does; src/ui/cookies/ is the only caller today. Delete that folder and
+   this object is simply unused.
+   ────────────────────────────────────────────────────────────────────────── */
+window.OpenModHeaderApi = {
+  // Put one name/value into the active profile's request headers and say what
+  // happened: "added" a row, or "updated" one that was already there.
+  //
+  // Writing over an enabled header of the same name rather than pushing a
+  // second one is the whole point: two enabled headers with one name are
+  // flagged as a conflict and only the lower of them is ever sent, so a
+  // second row would look like it worked and quietly do nothing.
+  setRequestHeader(name, value) {
+    const header = String(name || "").trim();
+    if (!header) return "ignored";
+    const text = value == null ? "" : String(value);
+
+    const list = activeProfile().headers;
+    const existing = list.find(
+      (h) =>
+        h.enabled &&
+        String(h.name || "").trim().toLowerCase() === header.toLowerCase()
+    );
+
+    let outcome;
+    if (existing) {
+      existing.value = text;
+      outcome = "updated";
+    } else {
+      const row = newHeader();
+      row.name = header;
+      row.value = text;
+      list.push(row);
+      outcome = "added";
+    }
+
+    collapsed.delete("request");
+    render();
+    save();
+    return outcome;
+  },
+
+  // A surface that was display:none cannot be measured, so anything that
+  // hides the list has to ask for the columns and pins to be worked out again
+  // once it is back.
+  refreshLayout() {
+    sizeAllColumns();
+    layoutPins();
+  },
+};
 
 function addRow(target, item = null) {
   const p = activeProfile();

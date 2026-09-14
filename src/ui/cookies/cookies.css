@@ -1,113 +1,124 @@
 /* ==========================================================================
-   Cookies panel.
+   Cookies page.
 
    Every selector here is prefixed ck- and nothing in shared/ui.css is
    overridden, so this file can be dropped without touching the rest of the
    UI. It does not merely read the shared tokens — it mirrors the header
    list's language so the two halves of the extension read as one product:
 
-     · the overlay shell copies .help-overlay / .help-panel
+     · it is a PAGE, not a dialog: .ck-page takes the place of .listarea in
+       the same .main column, under the same title bar and beside the same
+       rail, so there is no second window shape to learn
      · a cookie row is a .row — a flat, full-bleed band with a 2px left rail,
        a hairline between neighbours and a coloured rail when something is
        wrong, never a card floating in a padded column
      · metrics derive from --row-font-size, so the font-size and density
-       settings move this panel exactly as much as they move the list
+       settings move this page exactly as much as they move the list, and the
+       font, theme and mask settings arrive on their own because app.js sets
+       them on the document element this page lives in
      · the accent is --maroon, i.e. --profile-color, which app.js writes onto
        the document element. It is the active profile's own colour and this
-       panel re-tints with it the moment the profile changes, exactly like the
+       page re-tints with it the moment the profile changes, exactly like the
        title bar and the rail. Green and red keep their meanings from the list
        — live and not-being-sent — because those are status, not theme.
    ========================================================================== */
 
-.ck-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 14px;
-  background: var(--overlay);
-  backdrop-filter: blur(2px);
+/* ── THE SWAP ─────────────────────────────────────────────────────────────
+   One attribute on <html> decides which of the two pages .main is showing.
+   The title bar, the banner's paused colour and the rail are shared and stay
+   exactly where they were; only the body of the column changes. The footer
+   goes with the list because this page carries its own.
+   ────────────────────────────────────────────────────────────────────────── */
+html[data-view="cookies"] .listarea,
+html[data-view="cookies"] .footer,
+html[data-view="cookies"] .banner {
+  display: none !important;
 }
 
-.ck-overlay[hidden] {
+.ck-page {
   display: none;
 }
 
-.ck-panel {
-  width: 100%;
-  max-width: 560px;
-  max-height: 100%;
+html[data-view="cookies"] .ck-page {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  /* the transfer dialog is absolute inside this column, so it covers the page
+     without ever covering the title bar it was opened from */
+  position: relative;
   background: var(--surface);
-  box-shadow: var(--shadow);
+}
 
+.ck-page {
   /* Row metrics derive from the font-size setting exactly as .app's do, so a
      cookie row and a header row never drift apart. */
   --rf: var(--row-font-size, 13px);
   --l1-h: calc(var(--rf) + 3px);
   --row-gap: 5px;
 
-  /* one height for every control in the panel: search, scope, buttons, inputs */
+  /* one height for every control on the page: search, scope, buttons, inputs */
   --ctl-h: calc(var(--rf) + 15px);
 
-  /* One gutter for the whole panel — head, tools, rows and foot share it.
+  /* One gutter for the whole page — head, tools, rows and foot share it.
      The list indents its rows to --row-lead because a drag handle and a
      checkbox live in that space; a cookie row has neither, so borrowing that
      lead here would only be a wide empty margin. */
   --ck-x: 12px;
 }
 
+/* The title bar button reads as pressed while its page is the one showing,
+   the same way any toggle in this UI does. */
+#tbCookies.on {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
 /* ── HEAD ─────────────────────────────────────────────────────────────────
-   Same shape as .help-head: surface-strong, a maroon heading and a hairline.
+   One line: what this page is, then the host it is describing. The title bar
+   above already says which profile you are in, so this stays slim.
    ────────────────────────────────────────────────────────────────────────── */
 .ck-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 13px 12px 12px var(--ck-x);
+  padding: 7px 6px 7px var(--ck-x);
   border-bottom: 1px solid var(--line);
   background: var(--surface-strong);
 }
 
-.ck-heading {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.ck-heading h2 {
-  margin: 0;
-  display: flex;
+.ck-title {
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   color: var(--maroon);
-  font-size: 17px;
+  font-size: calc(var(--rf) + 1px);
+  font-weight: 700;
 }
 
-.ck-heading h2 svg {
-  width: 17px;
-  height: 17px;
+.ck-title svg {
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
 }
 
 /* a host is a value, and values are mono in this UI */
 .ck-host {
-  margin: 3px 0 0;
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--muted);
   font-size: calc(var(--rf) - 1.5px);
   font-family: var(--mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  direction: ltr;
+  text-align: left;
 }
 
 /* ── SHARED CONTROLS ─────────────────────────────────────────────────────── */
-.ck-panel svg {
+.ck-page svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -241,6 +252,124 @@
   font-size: calc(var(--rf) - 1px);
   padding: 0 4px;
   cursor: pointer;
+}
+
+/* ── TRANSFER DIALOG ──────────────────────────────────────────────────────
+   The one thing on this page that is allowed to float, because it is the one
+   thing that interrupts: both transfers ask what key and what value to send
+   before they touch anything. It copies .help-overlay / .help-panel so the
+   two modal shapes in the extension are the same shape.
+   ────────────────────────────────────────────────────────────────────────── */
+.ck-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+}
+
+.ck-modal-panel {
+  width: 100%;
+  max-width: 420px;
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px var(--ck-x) 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.ck-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ck-modal-head strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--maroon);
+  font-size: calc(var(--rf) + 1.5px);
+}
+
+.ck-modal-head strong svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.ck-modal-sub {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: calc(var(--rf) - 2px);
+  line-height: 1.5;
+}
+
+.ck-modal-sub[hidden] {
+  display: none;
+}
+
+.ck-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The dialog borrows the editor's fields wholesale — same labels, same
+   inputs, same flags, same hints — so there is one form language on this
+   page whether you are editing a cookie or sending one somewhere. */
+.ck-modal-panel input[type="text"],
+.ck-modal-panel input[type="datetime-local"],
+.ck-modal-panel textarea,
+.ck-modal-panel select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: calc(var(--rf) - 0.5px);
+  padding: 6px 8px;
+}
+
+.ck-modal-panel textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.ck-modal-panel input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* a key, a value and an address are all values: mono, and always left to
+   right whatever the surrounding text direction is */
+.ck-modal-panel .ck-mono {
+  font-family: var(--mono);
+  font-size: calc(var(--rf) - 2px);
+  direction: ltr;
+  text-align: left;
+  word-break: break-all;
+}
+
+.ck-modal-panel input:focus,
+.ck-modal-panel textarea:focus,
+.ck-modal-panel select:focus {
+  outline: none;
+  border-color: var(--maroon);
 }
 
 /* ── BODY ─────────────────────────────────────────────────────────────────
@@ -635,21 +764,9 @@ html[data-density="compact"] .ck-meta {
 }
 
 /* ── SIDE PANEL ──────────────────────────────────────────────────────────────
-   The panel is far narrower than the popup, so the overlay goes full-bleed
-   and the two-up rows in the editor fold into one column.
+   The rail lives along the bottom there, so the toast has to clear it. The
+   page itself needs nothing: it fills .main exactly as the header list does.
    ────────────────────────────────────────────────────────────────────────── */
-html[data-surface="sidePanel"] .ck-overlay {
-  padding: 0;
-}
-
-html[data-surface="sidePanel"] .ck-panel {
-  max-width: none;
-  height: 100%;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-
 html[data-surface="sidePanel"] .ck-toast {
   bottom: 66px;
 }
@@ -661,7 +778,7 @@ html[data-surface="sidePanel"] .ck-toast {
 
   /* The tools stay one line however narrow the surface gets: the search box
      gives up width, the scope and the Add button keep theirs. Wrapping them
-     cost a whole row of a panel that has none to spare. */
+     cost a whole row of a page that has none to spare. */
   .ck-tools {
     gap: 4px;
     padding-right: 4px;
@@ -669,5 +786,15 @@ html[data-surface="sidePanel"] .ck-toast {
 
   .ck-primary {
     padding: 0 8px;
+  }
+
+  /* Five row buttons is a lot for a 320px panel; they give up their padding
+     before the cookie name gives up any of its width. */
+  .ck-act {
+    width: 22px;
+  }
+
+  .ck-modal {
+    padding: 10px;
   }
 }
