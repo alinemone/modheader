@@ -1190,13 +1190,52 @@ html[data-density="compact"] .l2 {
   font-size: 11px;
 }
 
+/* The profile line gives up width before either link does: the links are the
+   fixed furniture of the footer and a long profile name is what varies. */
+#ruleCount {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Both links share the right end. Grouped rather than left to
+   space-between, which would otherwise push them apart. */
+.footer-links {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--muted);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .privacy:hover {
   color: var(--blue);
+}
+
+/* Muted at rest like the text beside it — the cup is what makes the link
+   findable, not colour. It takes its ink from the link.
+
+   display:block, not the default inline: an inline svg sits on the baseline
+   and its wrapper keeps the descender space underneath, which pushes the
+   glyph above the centre of the text it is meant to sit beside. */
+.privacy svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ── POPOVERS ────────────────────────────────────────────────────────────── */

@@ -94,6 +94,13 @@ const ICON = {
   tag:
     '<path d="M3.9 5.9v5c0 .7.3 1.3.7 1.8l6.8 6.8c.7.7 1.8.7 2.5 0l5.6-5.6c.7-.7.7-1.8 0-2.5l-6.8-6.8a2.5 2.5 0 0 0-1.8-.7h-5a2 2 0 0 0-2 2Z"/>' +
     '<circle cx="8" cy="8" r="1.1"/>',
+  // Drawn to fill the 24-box the way the rest of the set does: the ink runs
+  // y 4.2 → 20.2, so its optical centre is the box's centre and the cup lines
+  // up with the text beside it instead of riding above it.
+  coffee:
+    '<path d="M3.9 9.2h11.2v5.4a5.6 5.6 0 0 1-11.2 0Z"/>' +
+    '<path d="M15.1 10.6h1.7a2.5 2.5 0 0 1 0 5h-1.7"/>' +
+    '<path d="M7.9 4.2v2.6M11.5 4.2v2.6"/>',
   grip:
     '<circle cx="2.5" cy="2" r="1.25"/><circle cx="6.5" cy="2" r="1.25"/>' +
     '<circle cx="2.5" cy="7.5" r="1.25"/><circle cx="6.5" cy="7.5" r="1.25"/>' +
