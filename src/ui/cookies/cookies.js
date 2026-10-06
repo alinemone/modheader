@@ -1245,7 +1245,7 @@
   /* ── the title bar button ───────────────────────────────────────────────
      Inserted rather than declared in the two index.html files, so removing
      this folder removes the button with it. It lands between pause and ⋯:
-     reading the bar from the right that is ⋯, cookies, pause, ＋.
+     reading the bar from the right that is ⋯, cookies, pause.
      ────────────────────────────────────────────────────────────────────── */
   function mount() {
     const more = document.getElementById("tbMore");

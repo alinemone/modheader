@@ -37,7 +37,6 @@
             placeholder="Profile name"
           />
           <div class="spacer"></div>
-          <button class="tb-btn" id="tbAdd" title="New profile" data-i="plus"></button>
           <button class="tb-btn" id="tbPause" title="Pause all" data-i="pause"></button>
           <button class="tb-btn" id="tbMore" title="More actions" aria-haspopup="true" data-i="more"></button>
         </header>
@@ -58,7 +57,7 @@
                 <span class="gtitle">Request headers</span>
                 <span class="gcount" id="requestCount"></span>
                 <span class="sp"></span>
-                <button class="sec-add" data-target="request" title="Add request header" data-i="plus"></button>
+                <button class="sec-add" data-target="request" title="Add request header"><span data-i="plus"></span><span>Add</span></button>
                 <button class="chev" title="Collapse section" data-i="chev"></button>
               </div>
               <div id="requestRows" class="rows"></div>
@@ -70,7 +69,7 @@
                 <span class="gtitle">Response headers</span>
                 <span class="gcount" id="responseCount"></span>
                 <span class="sp"></span>
-                <button class="sec-add" data-target="response" title="Add response header" data-i="plus"></button>
+                <button class="sec-add" data-target="response" title="Add response header"><span data-i="plus"></span><span>Add</span></button>
                 <button class="chev" title="Collapse section" data-i="chev"></button>
               </div>
               <div id="responseRows" class="rows"></div>
@@ -92,8 +91,7 @@
                   title="Add filter"
                   aria-haspopup="true"
                   aria-expanded="false"
-                  data-i="plus"
-                ></button>
+                ><span data-i="plus"></span><span>Add</span></button>
                 <button class="chev" title="Collapse section" data-i="chev"></button>
               </div>
               <div id="filterRows" class="rows"></div>

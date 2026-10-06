@@ -1053,9 +1053,12 @@ function renderHeaderRows(containerId, list, datalistId) {
   container.innerHTML = "";
 
   if (list.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty-note";
-    empty.textContent = "Nothing here yet — use ＋ to add one.";
+    const target = containerId === "responseRows" ? "response" : "request";
+    const empty = document.createElement("button");
+    empty.type = "button";
+    empty.className = "empty-add";
+    empty.textContent = `＋ Add ${target} header`;
+    empty.addEventListener("click", () => addRow(target));
     container.appendChild(empty);
     return;
   }
@@ -1996,7 +1999,6 @@ function bindEvents() {
   });
 
   document.getElementById("railAddProfile").addEventListener("click", addProfile);
-  document.getElementById("tbAdd").addEventListener("click", addProfile);
 
   document.getElementById("railPause").addEventListener("click", togglePause);
   document.getElementById("tbPause").addEventListener("click", togglePause);

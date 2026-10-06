@@ -621,24 +621,31 @@ body.paused .banner {
   flex: 1;
 }
 
-/* reads as a button, not a glyph */
+/* a labelled text button in the kit's own voice (blue text, like
+   .drawer-add) — the word is what tells it apart from the rail's new-profile ＋ */
 .sec-add {
   flex: 0 0 auto;
-  width: 25px;
-  height: 22px;
+  height: 24px;
+  padding: 0 8px 0 5px;
+  border: none;
   border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
-  background: color-mix(in srgb, var(--blue) 8%, transparent);
+  background: transparent;
   color: var(--blue);
+  font: inherit;
+  font-size: calc(var(--rf) - 1.5px);
+  font-weight: 600;
   cursor: pointer;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .sec-add:hover {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #fff;
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+}
+
+.sec-add > span {
+  display: inline-flex;
 }
 
 .sec-add svg {
@@ -1144,6 +1151,27 @@ body.paused .banner {
   text-align: center;
   color: var(--faint);
   font-size: calc(var(--rf) - 2px);
+}
+
+/* an empty header section offers the action right where the rows will go —
+   the same dashed shape as .drawer-add */
+.empty-add {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 9px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  font-size: calc(var(--rf) - 1.5px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.empty-add:hover {
+  background: var(--hover);
 }
 
 /* ── DENSITY ──────────────────────────────────────────────────────────────
