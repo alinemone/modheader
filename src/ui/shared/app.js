@@ -1009,6 +1009,48 @@ function maskValue(value) {
   return prefix + "••••••••" + raw.slice(-8);
 }
 
+/* ── value height ─────────────────────────────────────────────────────────
+   A value is one line until the user drags its bottom line (.vedge) down.
+   The drag is capped at the text's own height, so the field can never be
+   pulled open past its last line, and a value that already fits cannot be
+   dragged at all. Double-clicking the line opens or folds it in one go.
+   Dragged heights live in memory by header id: a re-render (toggle, reorder,
+   reveal) keeps them, a reopened popup starts folded.
+   ────────────────────────────────────────────────────────────────────────── */
+const valueHeights = new Map();
+
+function capValueHeight(el) {
+  const height = el.style.height;
+  el.style.height = "0px"; // min-height holds it at one line for measuring
+  const oneLine = el.clientHeight;
+  const content = el.scrollHeight;
+  el.style.height = height;
+  el.style.maxHeight = content + "px";
+  el.classList.toggle("can-grow", content > oneLine + 1);
+  syncEdge(el);
+}
+
+// The edge is live only when there is more text than shows; "open" once the
+// whole value is visible, so a double-click knows which way to go.
+function syncEdge(el) {
+  const edge = el.parentElement && el.parentElement.querySelector(".vedge");
+  if (!edge) return;
+  const can = el.classList.contains("can-grow");
+  const open = can && el.offsetHeight >= parseFloat(el.style.maxHeight) - 1;
+  edge.classList.toggle("on", can);
+  edge.classList.toggle("open", open);
+  edge.title = can
+    ? open
+      ? "Drag to resize · double-click to fold to one line"
+      : "Drag to resize · double-click to show the whole value"
+    : "";
+}
+
+function setValueHeight(el, px) {
+  el.style.height = px == null ? "" : Math.round(px) + "px"; // CSS min/max clamp it
+  syncEdge(el);
+}
+
 // The eye mirrors whatever the field is showing right now, whether that came
 // from the button or from focusing the input. Single place, so the two paths
 // cannot drift apart.
@@ -1050,6 +1092,12 @@ function duplicateStatus(list) {
 
 function renderHeaderRows(containerId, list, datalistId) {
   const container = document.getElementById(containerId);
+  // Keep any height the user dragged before these rows are rebuilt.
+  container.querySelectorAll(".header-row").forEach((row) => {
+    const height = row.querySelector(".value")?.style.height;
+    if (height) valueHeights.set(row.dataset.id, height);
+    else valueHeights.delete(row.dataset.id);
+  });
   container.innerHTML = "";
 
   if (list.length === 0) {
@@ -1141,15 +1189,26 @@ function renderHeaderRows(containerId, list, datalistId) {
     const secret = looksSecret(h);
     const hidden = secret && mask && !revealed.has(h.id);
 
-    const value = document.createElement("input");
-    value.type = "text";
+    // A one-line textarea rather than an input, so a long token can be dragged
+    // open (see capValueHeight). Header values cannot hold line breaks, so
+    // Enter and pasted newlines are stripped in the key/input handlers below.
+    const value = document.createElement("textarea");
+    value.rows = 1;
+    value.spellcheck = false;
     value.className = "value";
     value.placeholder = "Value";
     value.value = hidden ? maskValue(h.value) : h.value;
     // Masked, not locked: the dots are only what an unfocused field shows.
     // Focus swaps the real value in so it stays editable (see focusin below).
     if (hidden) value.dataset.masked = "1";
-    l2.appendChild(value);
+    if (valueHeights.has(h.id)) value.style.height = valueHeights.get(h.id);
+
+    // The bottom line of the value, as a drag strip. Inert until
+    // capValueHeight finds more text than one line can show.
+    const edge = document.createElement("span");
+    edge.className = "vedge";
+    edge.setAttribute("aria-hidden", "true");
+    l2.append(value, edge);
 
     main.append(l1, l2);
 
@@ -1264,6 +1323,9 @@ function sizeColumns(container) {
   container.style.setProperty("--name-col", nameCol + "px");
   container.style.setProperty("--label-col", labelCol + "px");
   container.style.setProperty("--l1-col", block + "px");
+
+  // Column widths decide where the values wrap, so the caps follow them.
+  container.querySelectorAll(".header-row .value").forEach(capValueHeight);
 }
 
 function sizeAllColumns() {
@@ -1772,6 +1834,56 @@ function setupHeaderDelegation(containerId) {
     setEyeState(t.closest(".row")?.querySelector(".eye"), false);
   });
 
+  // Masking swaps the text on focus, so the cap is re-measured to match.
+  container.addEventListener("focusin", (e) => {
+    if (e.target.classList?.contains("value")) capValueHeight(e.target);
+  });
+
+  container.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (!t.classList?.contains("value") || e.key !== "Enter") return;
+    e.preventDefault(); // no line breaks in a header value
+    t.blur();
+  });
+
+  // .vedge — the value's bottom line. Drag it to resize, double-click it to
+  // open the whole value or fold it back to one line.
+  // Pressing it must not take focus from the value: a masked secret would
+  // re-mask on blur and its cap would drop back to one line mid-drag.
+  container.addEventListener("mousedown", (e) => {
+    if (e.target.closest?.(".vedge")) e.preventDefault();
+  });
+
+  container.addEventListener("pointerdown", (e) => {
+    const edge = e.target.closest?.(".vedge");
+    if (!edge || e.button !== 0) return;
+    const el = edge.parentElement.querySelector(".value");
+    const startY = e.clientY;
+    const startH = el.offsetHeight;
+    edge.setPointerCapture(e.pointerId);
+    edge.classList.add("dragging");
+
+    const move = (ev) => setValueHeight(el, startH + ev.clientY - startY);
+    const end = () => {
+      edge.classList.remove("dragging");
+      edge.removeEventListener("pointermove", move);
+      edge.removeEventListener("pointerup", end);
+      edge.removeEventListener("pointercancel", end);
+      // store what is actually shown, not the unclamped drag distance
+      if (el.style.height) setValueHeight(el, el.offsetHeight);
+    };
+    edge.addEventListener("pointermove", move);
+    edge.addEventListener("pointerup", end);
+    edge.addEventListener("pointercancel", end);
+  });
+
+  container.addEventListener("dblclick", (e) => {
+    const edge = e.target.closest?.(".vedge");
+    if (!edge) return;
+    const el = edge.parentElement.querySelector(".value");
+    setValueHeight(el, edge.classList.contains("open") ? null : parseFloat(el.style.maxHeight));
+  });
+
   container.addEventListener("focusout", (e) => {
     const t = e.target;
     if (!t.classList?.contains("value")) return;
@@ -1785,6 +1897,7 @@ function setupHeaderDelegation(containerId) {
       if (shouldMask) {
         t.value = maskValue(c.h.value);
         setEyeState(t.closest(".row")?.querySelector(".eye"), true);
+        capValueHeight(t);
       }
       return;
     }
@@ -1807,7 +1920,9 @@ function setupHeaderDelegation(containerId) {
     } else if (t.classList.contains("value")) {
       // A masked field always holds the real value while focused, and input
       // only fires on the focused field, so t.value is never the dots.
+      if (/[\r\n]/.test(t.value)) t.value = t.value.replace(/[\r\n]+/g, "");
       c.h.value = t.value;
+      capValueHeight(t);
     } else if (t.classList.contains("row-label")) {
       c.h.label = t.value;
       t.closest(".labelchip")?.classList.toggle("has-label", !!t.value.trim());

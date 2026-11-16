@@ -982,6 +982,80 @@ body.paused .banner {
   color: var(--text);
 }
 
+.header-row .value {
+  /* A textarea, one line tall until the user drags it open. The text always
+     wraps, so a taller field shows more of the same token rather than empty
+     space; overflow stays hidden, and the caret still scrolls it while typing.
+     JS sets max-height to the text's own height (capValueHeight). */
+  display: block;
+  height: var(--l2-h);
+  min-height: var(--l2-h);
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The value's bottom line is its resize handle — the same line that turns
+   blue on focus. A 7px strip sits on it so it is easy to catch; it is live
+   only when the value holds more than it shows (.on), and then the line
+   shows faintly on row hover, solid blue on hover and while dragging.
+   Double-click opens the whole value or folds it back. */
+.header-row .vedge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 7px;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.header-row .vedge.on {
+  pointer-events: auto;
+  cursor: ns-resize;
+}
+
+.header-row .vedge::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--blue);
+  opacity: 0;
+  transition: opacity 0.12s ease, height 0.12s ease;
+}
+
+.row:hover .vedge.on::after {
+  opacity: 0.35;
+}
+
+.header-row .vedge.on:hover::after,
+.header-row .vedge.dragging::after {
+  opacity: 1;
+  height: 2.5px;
+}
+
+/* keep the cursor and kill text selection for the whole drag */
+html:has(.vedge.dragging) {
+  cursor: ns-resize;
+  user-select: none;
+}
+
+.header-row .value:focus {
+  background: color-mix(in srgb, var(--blue) 5%, transparent);
+}
+
+/* the line follows whatever height the value was dragged to */
+.header-row .l2 {
+  position: relative; /* anchors .vedge to the value's bottom */
+  height: auto;
+  min-height: var(--l2-h);
+}
+
 /* Row actions — visible at rest, solid on hover. The slot is a fixed three
    buttons wide even when a row only needs one, so the value column ends at
    the same x on every row. */
@@ -1203,6 +1277,17 @@ html[data-density="compact"] .l1 {
 html[data-density="compact"] .l2 {
   flex: 1 1 auto;
   min-width: 92px;
+}
+
+/* A dragged-open value grows downward; the key stays on its first line. */
+html[data-density="compact"] .header-row .l2 {
+  height: auto;
+  min-height: calc(var(--rf) + 7px);
+  align-items: flex-end; /* value bottom = line bottom, where .vedge sits */
+}
+
+html[data-density="compact"] .header-row .rmain {
+  align-items: flex-start;
 }
 
 /* ── FOOTER ──────────────────────────────────────────────────────────────── */
