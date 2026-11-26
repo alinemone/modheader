@@ -983,15 +983,28 @@ body.paused .banner {
 }
 
 .header-row .value {
-  /* A textarea, one line tall until the user drags it open. The text always
-     wraps, so a taller field shows more of the same token rather than empty
-     space; overflow stays hidden, and the caret still scrolls it while typing.
-     JS sets max-height to the text's own height (capValueHeight). */
+  /* A textarea, one line tall until the user drags it open. Folded it does
+     not wrap — it behaves like the old single-line input (scrolls sideways,
+     Shift+End reaches the real end). Opened (.wrapped) it wraps, so a taller
+     field shows more of the same token. JS caps max-height at the wrapped
+     text's own height (capValueHeight). */
   display: block;
   height: var(--l2-h);
   min-height: var(--l2-h);
   resize: none;
-  overflow: hidden;
+  /* auto, not hidden: Chrome only scrolls a textarea to follow the caret
+     (Shift+←/→, End) when it is a real scroll container. The bars are hidden
+     so it still looks like the plain input it replaced. */
+  overflow: auto;
+  scrollbar-width: none;
+  white-space: pre;
+}
+
+.header-row .value::-webkit-scrollbar {
+  display: none;
+}
+
+.header-row .value.wrapped {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

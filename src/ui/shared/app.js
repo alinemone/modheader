@@ -1019,13 +1019,20 @@ function maskValue(value) {
    ────────────────────────────────────────────────────────────────────────── */
 const valueHeights = new Map();
 
+// Folded, the value is a true single line (no wrap), so it scrolls sideways
+// and Shift+End / Shift+→ select to the real end exactly like the old input.
+// It only wraps once it has been opened past one line.
 function capValueHeight(el) {
   const height = el.style.height;
+  const wasWrapped = el.classList.contains("wrapped");
+  el.classList.add("wrapped"); // measure the wrapped height
   el.style.height = "0px"; // min-height holds it at one line for measuring
   const oneLine = el.clientHeight;
   const content = el.scrollHeight;
   el.style.height = height;
+  el.classList.toggle("wrapped", wasWrapped);
   el.style.maxHeight = content + "px";
+  el.dataset.line = String(oneLine);
   el.classList.toggle("can-grow", content > oneLine + 1);
   syncEdge(el);
 }
@@ -1048,6 +1055,8 @@ function syncEdge(el) {
 
 function setValueHeight(el, px) {
   el.style.height = px == null ? "" : Math.round(px) + "px"; // CSS min/max clamp it
+  const line = parseFloat(el.dataset.line) || 0;
+  el.classList.toggle("wrapped", !!line && el.offsetHeight > line + 1);
   syncEdge(el);
 }
 
@@ -1201,7 +1210,10 @@ function renderHeaderRows(containerId, list, datalistId) {
     // Masked, not locked: the dots are only what an unfocused field shows.
     // Focus swaps the real value in so it stays editable (see focusin below).
     if (hidden) value.dataset.masked = "1";
-    if (valueHeights.has(h.id)) value.style.height = valueHeights.get(h.id);
+    if (valueHeights.has(h.id)) {
+      value.style.height = valueHeights.get(h.id);
+      value.classList.add("wrapped");
+    }
 
     // The bottom line of the value, as a drag strip. Inert until
     // capValueHeight finds more text than one line can show.
@@ -1841,9 +1853,35 @@ function setupHeaderDelegation(containerId) {
 
   container.addEventListener("keydown", (e) => {
     const t = e.target;
-    if (!t.classList?.contains("value") || e.key !== "Enter") return;
-    e.preventDefault(); // no line breaks in a header value
-    t.blur();
+    if (!t.classList?.contains("value")) return;
+    if (e.key === "Enter") {
+      e.preventDefault(); // no line breaks in a header value
+      t.blur();
+      return;
+    }
+    // A header value is one logical line, so Home/End go to its real start
+    // and end even when it is opened and wrapped — as in a plain input.
+    if ((e.key === "Home" || e.key === "End") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const to = e.key === "End" ? t.value.length : 0;
+      if (!e.shiftKey) {
+        t.setSelectionRange(to, to);
+      } else {
+        // keep the anchor where the selection started
+        const back = t.selectionDirection === "backward";
+        const anchor = back ? t.selectionEnd : t.selectionStart;
+        if (to >= anchor) t.setSelectionRange(anchor, to, "forward");
+        else t.setSelectionRange(to, anchor, "backward");
+      }
+      // setSelectionRange moves the caret but does not scroll it into view
+      if (to === 0) {
+        t.scrollLeft = 0;
+        t.scrollTop = 0;
+      } else {
+        t.scrollLeft = t.scrollWidth;
+        t.scrollTop = t.scrollHeight;
+      }
+    }
   });
 
   // .vedge — the value's bottom line. Drag it to resize, double-click it to
@@ -1887,6 +1925,9 @@ function setupHeaderDelegation(containerId) {
   container.addEventListener("focusout", (e) => {
     const t = e.target;
     if (!t.classList?.contains("value")) return;
+    // like a plain input: leaving the field shows its start again
+    t.scrollLeft = 0;
+    t.scrollTop = 0;
     const c = find(e);
     if (!c) return;
     const wasMasked = t.dataset.masked === "1";
